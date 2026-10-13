@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Content Engine</title>
+<meta name="description" content="Plan, write and measure SEO content that follows Google's rules. Bring your own Claude, ChatGPT or Gemini API key.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F3F5F8;--panel:#FFFFFF;--ink:#16202C;--muted:#5E6B7B;--faint:#8A96A6;--line:#E1E6ED;--soft-line:#EEF1F5;
+  --accent:#0E7C7B;--accent-ink:#FFFFFF;--soft:#E3F2F1;
+  --good:#1E8E4E;--good-soft:#E4F4EA;--warn:#B7791F;--warn-soft:#FBF1DE;--bad:#C2412D;--bad-soft:#FBE7E3;
+  --c1:#0E7C7B;--c2:#4C6FBF;--c3:#E0A100;--c4:#C2412D;--c5:#8A96A6;--c6:#7B5EA7;
+  --radius:12px;--shadow:0 1px 2px rgba(22,32,44,.04),0 1px 1px rgba(22,32,44,.03);
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0F141B;--panel:#171E27;--ink:#E7ECF2;--muted:#9BA7B6;--faint:#748094;--line:#273140;--soft-line:#1F2833;
+  --accent:#3DB5B0;--accent-ink:#06201F;--soft:#14302F;
+  --good:#5CC27E;--good-soft:#16301F;--warn:#E3AE4A;--warn-soft:#33280F;--bad:#EF7B66;--bad-soft:#3A1D18;
+  --c1:#3DB5B0;--c2:#7E9BDB;--c3:#E3AE4A;--c4:#EF7B66;--c5:#748094;--c6:#B19BD8;--shadow:none}}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 "Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:"Bricolage Grotesque","Instrument Sans",system-ui,sans-serif;margin:0;line-height:1.2;letter-spacing:-.01em}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* layout */
+.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:16px;padding:12px 24px;background:var(--panel);border-bottom:1px solid var(--line)}
+.top h1{font-size:19px;font-weight:700;display:flex;align-items:center;gap:9px}
+.logo{width:26px;height:26px;border-radius:8px;background:var(--accent);display:grid;place-items:center;color:var(--accent-ink);font-size:14px;font-weight:700}
+.site-pick{margin-left:auto;display:flex;align-items:center;gap:10px}
+.site-pick label{margin:0;font-weight:500;color:var(--muted);font-size:13px}
+.top select{width:auto;min-width:220px;max-width:340px;padding:7px 10px}
+.layout{display:grid;grid-template-columns:232px 1fr;min-height:calc(100vh - 57px)}
+nav{padding:18px 12px;border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;gap:2px;position:sticky;top:57px;height:calc(100vh - 57px);overflow:auto}
+.nav-group{font-size:12px;color:var(--faint);font-weight:600;padding:14px 12px 4px}
+.nav-group:first-child{padding-top:0}
+nav button{all:unset;cursor:pointer;display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;color:var(--ink);font-size:14.5px}
+nav button svg{width:17px;height:17px;flex:none;stroke:var(--muted);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+nav button:hover{background:var(--bg)}
+nav button[aria-current=true]{background:var(--soft);color:var(--accent);font-weight:600}
+nav button[aria-current=true] svg{stroke:var(--accent)}
+nav button:focus-visible{outline:2px solid var(--accent)}
+.badge{margin-left:auto;background:var(--bad);color:#fff;border-radius:99px;font-size:11px;font-weight:700;padding:0 7px;line-height:18px}
+main{padding:28px 32px 60px;min-width:0;max-width:1180px;width:100%}
+@media(max-width:900px){.layout{grid-template-columns:1fr}nav{position:static;height:auto;flex-direction:row;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line);padding:8px}.nav-group{display:none}nav button{white-space:nowrap}main{padding:18px 14px 48px}.top{padding:10px 14px;flex-wrap:wrap}.site-pick{margin-left:0;width:100%}.top select{flex:1;max-width:none}}
+
+/* page header */
+.page-head{margin-bottom:18px}
+.page-head h2{font-size:26px;font-weight:700}
+.page-head p{color:var(--muted);margin:6px 0 0;max-width:68ch}
+
+/* cards */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:22px;margin-bottom:16px;box-shadow:var(--shadow)}
+.panel>h2{font-size:18px;font-weight:700}
+.panel h2+.lead{margin-top:4px}
+.lead{color:var(--muted);margin:4px 0 16px;max-width:68ch;font-size:14.5px}
+.block{margin:20px 0}.block:first-child{margin-top:0}
+.block h3{font-size:15px;font-weight:600;margin-bottom:8px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.grid2>.panel,.grid3>.panel,.grid4>.panel{margin-bottom:0}
+.grid2>*,.grid3>*,.grid4>*{min-width:0}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px}
+@media(max-width:1000px){.grid4{grid-template-columns:1fr 1fr}}
+@media(max-width:700px){.grid2,.grid3{grid-template-columns:1fr}.grid4{grid-template-columns:1fr 1fr;gap:10px}.grid4 .panel{padding:14px}.kpi{flex-direction:column;align-items:flex-start;gap:8px}.kpi .num{font-size:22px}.grid4 .kpi svg{width:52px!important;height:52px!important}#site-state{display:none}}
+
+/* forms */
+label{display:block;font-weight:600;font-size:13.5px;margin-bottom:6px}
+label span{font-weight:400;color:var(--muted)}
+input,textarea,select{width:100%;font:inherit;font-size:14.5px;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:9px 11px}
+input[type=file]{padding:7px}
+input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);margin:0}
+textarea{min-height:96px;resize:vertical}
+.field{margin-bottom:14px}
+input:focus,textarea:focus,select:focus{outline:2px solid var(--soft);border-color:var(--accent)}
+.check{display:flex;align-items:center;gap:8px;font-weight:400;margin:0}
+.btn{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:14px;font-weight:600;border-radius:8px;padding:9px 16px;cursor:pointer;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);text-decoration:none;white-space:nowrap}
+.btn:hover{filter:brightness(1.05)}
+.btn.ghost{background:var(--panel);color:var(--ink);border-color:var(--line)}
+.btn.ghost:hover{border-color:var(--accent);color:var(--accent)}
+.btn.small{padding:5px 10px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.status{color:var(--muted);font-size:13.5px}
+.err{color:var(--bad)}
+.spin::before{content:"";display:inline-block;width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;margin-right:7px;vertical-align:-1px;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin::before{animation:none}}
+
+/* stats + kpis */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin:14px 0}
+.stat{background:var(--bg);border-radius:10px;padding:12px 14px}
+.stat strong{display:block;font-family:"Bricolage Grotesque",system-ui,sans-serif;font-size:24px;font-weight:700}
+.stat span{color:var(--muted);font-size:12.5px}
+.kpi{display:flex;align-items:center;gap:14px}
+.kpi .num{font-family:"Bricolage Grotesque",system-ui,sans-serif;font-size:30px;font-weight:700;line-height:1}
+.kpi .lbl{color:var(--muted);font-size:13px;margin-top:4px}
+.delta{font-size:12.5px;font-weight:600}.delta.up{color:var(--good)}.delta.down{color:var(--bad)}
+
+/* tables */
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin:8px 0}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--soft-line);vertical-align:top}
+th{background:var(--bg);color:var(--muted);font-size:12.5px;font-weight:600;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:color-mix(in srgb,var(--bg) 50%,transparent)}
+.url{color:var(--muted);font-size:12.5px;word-break:break-all}
+
+/* pills, states */
+.pill{display:inline-block;border-radius:99px;padding:2px 9px;font-size:12px;font-weight:600;background:var(--bg);color:var(--muted);white-space:nowrap}
+.pass{color:var(--good)}.warn{color:var(--warn)}.fail{color:var(--bad)}
+.pill.pass{background:var(--good-soft)}.pill.warn{background:var(--warn-soft)}.pill.fail{background:var(--bad-soft)}
+.verdict{border-left:4px solid var(--accent);padding:12px 16px;background:var(--bg);border-radius:0 10px 10px 0;margin:12px 0;font-weight:500}
+.verdict.exists{border-color:var(--bad);background:var(--bad-soft)}.verdict.related{border-color:var(--warn);background:var(--warn-soft)}.verdict.clear{border-color:var(--good);background:var(--good-soft)}
+.empty{text-align:center;padding:26px 16px;color:var(--muted);border:1px dashed var(--line);border-radius:10px}
+.empty b{display:block;color:var(--ink);margin-bottom:4px}
+.empty .btn{margin-top:10px}
+ul.c{margin:0;padding-left:18px}ul.c li{margin:4px 0}
+mark{background:var(--warn-soft);color:inherit;padding:0 4px;border-radius:4px}
+pre{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:14px;overflow:auto;font-size:12.5px;max-height:360px}
+details>summary{cursor:pointer}
+.hidden{display:none!important}
+
+/* content preview */
+.preview{border:1px solid var(--line);border-radius:10px;padding:8px 26px 18px;max-height:640px;overflow:auto;background:var(--panel)}
+.preview h1{font-size:28px;margin:18px 0 10px}.preview h2{font-size:21px;margin:24px 0 8px}.preview h3{font-size:17px;margin:16px 0 6px}
+.serp{border:1px solid var(--line);border-radius:10px;padding:14px 16px;max-width:620px;background:var(--panel)}
+.serp .u{color:var(--good);font-size:13px}.serp .t{color:#1a0dab;font-size:19px;margin:3px 0}.serp .d{color:var(--muted);font-size:14px}
+@media(prefers-color-scheme:dark){.serp .t{color:#8ab4f8}}
+.tabs2{display:flex;gap:4px;margin:14px 0;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+.tabs2 button{all:unset;cursor:pointer;padding:8px 12px;font-size:14px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs2 button[aria-pressed=true]{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+.tabs2 button:focus-visible{outline:2px solid var(--accent)}
+
+/* release gate + scores */
+.gate{border-radius:10px;padding:14px 16px;margin:12px 0;border:1px solid var(--line)}
+.gate.ready_for_human_review{background:var(--good-soft);border-color:var(--good)}
+.gate.improve_before_publishing,.gate.needs_work{background:var(--warn-soft);border-color:var(--warn)}
+.gate.do_not_publish,.gate.blocked{background:var(--bad-soft);border-color:var(--bad)}
+.gate b{font-size:16px}
+.scores{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
+.sc{background:var(--bg);border-radius:10px;padding:10px 12px}
+.sc strong{font-family:"Bricolage Grotesque",system-ui,sans-serif;font-size:24px}
+.sc span{display:block;color:var(--muted);font-size:12px}
+.sc.low strong{color:var(--bad)}
+.bar{height:6px;border-radius:3px;background:var(--line);margin-top:7px;position:relative}
+.bar i{position:absolute;inset:0 auto 0 0;border-radius:3px;background:var(--accent)}
+.sc.low .bar i{background:var(--bad)}
+.bar em{position:absolute;top:-3px;width:2px;height:12px;background:var(--ink);opacity:.45}
+.score{font-family:"Bricolage Grotesque",system-ui,sans-serif;font-size:32px;font-weight:700}
+
+/* misc from features */
+.act{font-weight:700;text-transform:capitalize}
+.inline-edit{width:auto;min-width:70px;padding:5px 7px;font-size:13px}
+.sev-error,.sev-high{color:var(--bad)}.sev-medium{color:var(--warn)}.sev-low{color:var(--muted)}
+details.iss{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:8px 0;background:var(--panel)}
+details.iss summary{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+details.iss[open] summary{margin-bottom:8px}
+.pri{display:inline-block;min-width:30px;text-align:center;border-radius:6px;font-weight:700;font-size:12px;padding:2px 6px;background:var(--bg);color:var(--muted)}
+.pri.P0{background:var(--bad);color:#fff}.pri.P1{background:var(--bad-soft);color:var(--bad)}.pri.P2{background:var(--warn-soft);color:var(--warn)}
+.done-row{opacity:.55}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:0}
+
+/* charts */
+.chart-card h3{font-size:15px;font-weight:600;margin-bottom:2px}
+.chart-card .sub{color:var(--muted);font-size:13px;margin-bottom:12px}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart text{fill:var(--muted);font:12px "Instrument Sans",system-ui,sans-serif}
+.chart .val{fill:var(--ink);font-weight:600}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--muted);margin-top:8px}
+.donut-wrap{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.donut-wrap .legend{flex-direction:column;gap:6px;margin:0}
+.hbar{display:grid;grid-template-columns:minmax(90px,38%) 1fr auto;gap:6px 10px;align-items:center;font-size:13.5px}
+.hbar .l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hbar .t{height:10px;background:var(--bg);border-radius:5px;overflow:hidden}
+.hbar .t i{display:block;height:100%;border-radius:5px;min-width:0}
+.hbar .v{font-weight:600;font-variant-numeric:tabular-nums;text-align:right;min-width:36px}
+
+/* home */
+.steps{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.steps li{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;background:var(--bg)}
+.steps .n{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;background:var(--panel);border:1.5px solid var(--line);flex:none}
+.steps li.done .n{background:var(--good);border-color:var(--good);color:#fff}
+.steps li.done .t{color:var(--muted);text-decoration:line-through}
+.steps .t{flex:1}
+.welcome{padding:34px;text-align:left}
+mark.hl-filler{background:var(--warn-soft);border-bottom:2px solid var(--warn)}mark.hl-unsourced{background:var(--bad-soft);border-bottom:2px solid var(--bad)}
+mark.hl-repetition{background:color-mix(in srgb,var(--c6) 18%,transparent);border-bottom:2px solid var(--c6)}mark.hl-long{background:color-mix(in srgb,var(--c2) 15%,transparent);border-bottom:2px solid var(--c2)}
+.hl-legend{display:flex;gap:10px;flex-wrap:wrap;font-size:13px;margin-bottom:10px}
+.hl-list li{margin:6px 0;font-size:13.5px}
+.idea{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:8px 0;display:flex;gap:12px;align-items:flex-start;background:var(--panel)}
+.idea .body{flex:1;min-width:0}.idea .t{font-weight:600}
+.idea.covered{background:var(--bg)}
+.ev{display:inline-block;font-size:12px;border-radius:99px;padding:1px 8px;margin:4px 4px 0 0;background:var(--bg)}
+.ev.google{background:color-mix(in srgb,var(--c2) 15%,transparent)}.ev.keyword{background:color-mix(in srgb,var(--c1) 15%,transparent)}
+.ev.ai{background:color-mix(in srgb,var(--c6) 18%,transparent)}.ev.site{background:color-mix(in srgb,var(--c3) 18%,transparent)}
+.pillar{background:var(--soft);border-radius:8px;padding:8px 12px;margin:6px 0 4px;font-size:14px}
+.month{margin:18px 0 6px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.month h3{font-size:16px}
+.plan-item{display:grid;grid-template-columns:1fr 140px 140px 150px auto;gap:8px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:6px 0;background:var(--panel)}
+@media(max-width:1000px){.plan-item{grid-template-columns:1fr 1fr}}
+.alerts{display:grid;gap:8px;margin-bottom:16px}
+.alert{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;border-radius:10px;padding:10px 14px;border:1px solid var(--line);background:var(--panel)}
+.alert.warn{border-color:var(--warn);background:var(--warn-soft)}.alert.bad{border-color:var(--bad);background:var(--bad-soft)}.alert.info{border-color:var(--c2)}
+.kpi-link{all:unset;cursor:pointer;display:block}.kpi-link:hover .panel{border-color:var(--accent)}.kpi-link:focus-visible{outline:2px solid var(--accent);border-radius:12px}
+.kpi-link .panel{height:100%}
+.changes{display:flex;gap:8px;flex-wrap:wrap}.changes span{background:var(--bg);border-radius:99px;padding:4px 10px;font-size:13px}
+.pipe{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.pipe button{all:unset;cursor:pointer;background:var(--bg);border-radius:10px;padding:12px;text-align:center;position:relative}
+.pipe button:hover{outline:1px solid var(--accent)}.pipe button:focus-visible{outline:2px solid var(--accent)}
+.pipe b{display:block;font-family:"Bricolage Grotesque",system-ui,sans-serif;font-size:26px}.pipe span{font-size:12.5px;color:var(--muted)}
+@media(max-width:700px){.pipe{grid-template-columns:1fr 1fr}}
+.act-group{margin:18px 0 6px;font-size:15px;font-weight:600;display:flex;gap:8px;align-items:center}
+.act-item{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:8px 0;background:var(--panel)}
+.act-item.done{opacity:.6}
+.act-main{display:flex;gap:12px;align-items:flex-start}
+.act-main .body{flex:1;min-width:0}
+.act-main .title{font-weight:600}
+.act-meta{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px;font-size:12.5px;color:var(--muted)}
+.act-side{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+.qw{background:var(--good-soft);color:var(--good);border-radius:99px;padding:1px 8px;font-weight:600;font-size:12px}
+.overdue{color:var(--bad);font-weight:600}
+.act-edit{display:grid;grid-template-columns:1fr 160px;gap:8px 12px;margin-top:10px}
+@media(max-width:700px){.act-main{flex-direction:column}.act-side{flex-direction:row;align-items:center}.act-edit{grid-template-columns:1fr}}
+.chip input{margin-right:6px;vertical-align:-2px}
+.res-cell{white-space:nowrap;font-size:13px}
+.hist{display:inline-flex;gap:3px;vertical-align:middle}.hist i{width:9px;height:9px;border-radius:50%;background:var(--line);display:inline-block}.hist i.y{background:var(--good)}.hist i.n{background:var(--bad);opacity:.7}
+.ans{background:var(--bg);border-radius:8px;padding:8px 10px;margin:6px 0;font-size:13.5px}
+.why-box{border-left:4px solid var(--c2);background:var(--bg);border-radius:0 8px 8px 0;padding:10px 14px;margin-top:8px}
+.line-chart svg{display:block;width:100%;height:auto}
+.line-chart .ax{fill:var(--muted);font:11px "Instrument Sans",system-ui,sans-serif}
+.upd-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:6px}
+.upd-legend i{display:inline-block;width:12px;height:10px;border-radius:2px;margin-right:5px;vertical-align:0}
+.snip-opt{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:6px 0;background:var(--panel)}
+.snip-opt .t{color:#1a0dab;font-size:16px}@media(prefers-color-scheme:dark){.snip-opt .t{color:#8ab4f8}}
+.delta.flat{color:var(--muted)}
+.why{color:var(--muted);margin:4px 0 0;font-size:14px}
+.fix-cmp{display:grid;grid-template-columns:110px 1fr 1fr;gap:8px 12px;align-items:start;font-size:14px}
+.fix-cmp .h{font-weight:600;color:var(--muted);font-size:12.5px}
+.fix-cmp .new{background:var(--good-soft);border-radius:6px;padding:6px 8px}
+.fix-cmp .old{background:var(--bg);border-radius:6px;padding:6px 8px;color:var(--muted)}
+@media(max-width:800px){.fix-cmp{grid-template-columns:1fr}}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:10px 0}
+.facts div{background:var(--bg);border-radius:8px;padding:8px 10px;font-size:13px}.facts b{display:block;font-size:15px}
+.kwinfo{font-size:13px;margin-top:6px;color:var(--muted);min-height:18px}
+.kwinfo .linkbtn{font-size:13px}
+.style-box{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:4px}
+.stepper{list-style:none;display:flex;gap:6px;margin:16px 0 0;padding:0;flex-wrap:wrap}
+.stepper li{flex:1;min-width:120px;font-size:13px;padding:8px 10px;border-radius:8px;background:var(--bg);color:var(--muted);border-top:3px solid var(--line)}
+.stepper li.done{border-top-color:var(--good);color:var(--ink)}.stepper li.now{border-top-color:var(--accent);color:var(--ink);font-weight:600}
+.edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+@media(max-width:1000px){.edit-grid{grid-template-columns:1fr}}
+.md-edit{font:13.5px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;min-height:560px;resize:vertical;tab-size:2}
+.edit-grid .preview{max-height:640px;position:sticky;top:70px}
+.ph-list{display:grid;gap:6px;max-height:260px;overflow:auto}
+.ph-item{display:flex;gap:10px;align-items:center;justify-content:space-between;background:var(--warn-soft);border-radius:8px;padding:7px 10px;font-size:13.5px}
+.ph-item span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.cnt{font-size:12px;color:var(--muted);margin-top:4px}.cnt.bad{color:var(--bad)}
+.unsaved{color:var(--warn);font-weight:600;font-size:13px}
+.approve-box{border:1px dashed var(--line);border-radius:10px;padding:14px 16px;margin-top:16px}
+.gate.approved{background:var(--good-soft);border-color:var(--good)}
+.decision{border-left:6px solid var(--accent);display:flex;gap:16px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
+.decision.create{border-left-color:var(--good)}.decision.update,.decision.merge,.decision.redirect{border-left-color:var(--warn)}.decision.skip{border-left-color:var(--bad)}.decision.keep{border-left-color:var(--c2)}
+.decision h2{font-size:22px;margin-bottom:6px}
+.decision .why{color:var(--muted);max-width:70ch;margin:0}
+.chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.chip{all:unset;cursor:pointer;font-size:13px;padding:4px 10px;border-radius:99px;background:var(--bg);border:1px solid var(--line)}
+.chip:hover{border-color:var(--accent);color:var(--accent)}.chip:focus-visible{outline:2px solid var(--accent)}
+.gap-item{background:var(--good-soft);border-radius:8px;padding:8px 12px;margin:6px 0}
+.mini-card .lbl{color:var(--muted);font-size:12.5px;margin-bottom:4px}.mini-card .val{font-weight:600;font-size:16px}
+.prov{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;gap:4px;background:var(--panel);border:1.5px solid var(--line);border-radius:var(--radius);padding:14px 16px}
+.prov:hover{border-color:var(--accent)}
+.prov[aria-pressed=true]{border-color:var(--accent);background:var(--soft)}
+.prov:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.prov .pill{align-self:flex-start;margin-top:4px}
+code{background:var(--bg);padding:1px 5px;border-radius:4px;font-size:13px}
+label.btn{display:inline-flex;margin:0;font-size:14px}
+.row-links{display:flex;gap:12px;margin-top:3px}
+.linkbtn{all:unset;cursor:pointer;color:var(--accent);font-size:12.5px;font-weight:600}
+.linkbtn:hover{text-decoration:underline}.linkbtn:focus-visible{outline:2px solid var(--accent)}
+.num-in{width:78px;min-width:0}.num-in.sm{width:56px}
+.kw-cell{min-width:190px}.cov-cell{min-width:150px;max-width:220px}.nowrap{white-space:nowrap}
+a.trunc{display:block;max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:4px;text-decoration:none}
+a.trunc:hover{text-decoration:underline}
+.welcome h2{font-size:24px;margin-bottom:6px}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1><span class="logo" aria-hidden="true">C</span>Content Engine</h1>
+  <div class="site-pick"><label for="site-select">Website</label><select id="site-select"><option value="">No website yet</option></select><span class="status" id="site-state"></span><button class="btn ghost small" id="ai-pill" data-go-settings>AI: not connected</button></div>
+</header>
+<div class="layout">
+<nav aria-label="Sections">
+  <div class="nav-group">Overview</div>
+  <button data-v="home" aria-current="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>Home</button>
+  <button data-v="actions" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>To-do list<span class="badge hidden" id="nav-badge"></span></button>
+  <div class="nav-group">Plan</div>
+  <button data-v="strategy" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>Content ideas</button>
+  <button data-v="keyword" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>Check a keyword</button>
+  <button data-v="urlmap" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/></svg>Keywords</button>
+  <div class="nav-group">Create</div>
+  <button data-v="generate" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/></svg>Write a page</button>
+  <button data-v="audit" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12l2 2 4-4"/><rect x="4" y="3" width="16" height="18" rx="2"/></svg>Review a draft</button>
+  <button data-v="library" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6v14H4zM14 5h6v14h-6z"/></svg>My pages</button>
+  <div class="nav-group">Measure</div>
+  <button data-v="tech" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Site health</button>
+  <button data-v="gsc" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Google search</button>
+  <button data-v="aivis" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.5 5.5L20 11l-5.5 2.5L12 19l-2.5-5.5L4 11l5.5-2.5z"/></svg>AI answers</button>
+  <div class="nav-group">Setup</div>
+  <button data-v="settings" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>AI &amp; data</button>
+  <button data-v="site" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>Websites</button>
+  <button data-v="rules" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h7"/></svg>Rules</button>
+</nav>
+<main>
+
+<section data-view="home">
+  <div class="page-head"><h2>Home</h2><p>Your site at a glance, and what to do next.</p></div>
+  <div id="home-out"><div class="panel"><p class="status spin">Loading…</p></div></div>
+</section>
+
+<section data-view="site" class="hidden">
+  <div class="page-head"><h2>Websites</h2><p>Add your website. The engine reads its pages, so every suggestion is based on what you already have.</p></div>
+  <div class="panel">
+    <div class="grid2">
+      <div class="field"><label for="s-url">Website URL</label><input id="s-url" placeholder="https://example.com"></div>
+      <div class="field"><label for="s-name">Brand name</label><input id="s-name" placeholder="Example"></div>
+    </div>
+    <div class="field"><label for="s-product">What the product does</label><textarea id="s-product" placeholder="One or two sentences, plus what makes it different."></textarea></div>
+    <div class="grid2">
+      <div class="field"><label for="s-aud">Audience</label><input id="s-aud" placeholder="Roles, company size, industries"></div>
+      <div class="field"><label for="s-max">Pages to read</label><input id="s-max" type="number" value="200" min="10" max="1000"></div>
+    </div>
+    <div class="row"><button class="btn" id="s-add">Read my website</button><span class="status" id="s-status" role="status"></span></div>
+  </div>
+  <div class="panel hidden" id="site-overview"></div>
+</section>
+
+<section data-view="actions" class="hidden">
+  <div class="page-head"><h2>To-do list</h2><p>Everything worth fixing or creating, from every part of the tool, most valuable first. Click <b>Do it</b> to jump straight to the fix.</p></div>
+  <div id="ac-top"></div>
+  <div class="panel">
+    <div class="row" style="justify-content:space-between;margin-bottom:12px">
+      <div class="tabs2" role="group" id="ac-views" style="margin:0;border:0"><button data-av="priority" aria-pressed="true">By priority</button><button data-av="page" aria-pressed="false">By page</button><button data-av="source" aria-pressed="false">By source</button></div>
+      <div class="row"><button class="btn ghost small" id="ac-run">Refresh</button><button class="btn ghost small" id="ac-csv">Export CSV</button><span class="status" id="ac-status" role="status"></span></div>
+    </div>
+    <div class="row" style="margin-bottom:12px">
+      <input id="ac-q" placeholder="Search to-dos" style="flex:1;min-width:160px">
+      <select id="ac-filter" style="width:auto" aria-label="Status"><option value="active">Open and in progress</option><option value="quick">Quick wins only</option><option value="overdue">Overdue</option><option value="all">All</option><option value="done">Done and dismissed</option></select>
+      <select id="ac-source" style="width:auto" aria-label="Source"><option value="">All sources</option></select>
+      <select id="ac-owner" style="width:auto" aria-label="Owner"><option value="">Anyone</option></select>
+    </div>
+    <div id="ac-out"></div>
+  </div>
+</section>
+
+<section data-view="tech" class="hidden">
+  <div class="page-head"><h2>Site health</h2><p>Problems on your pages that can hold back rankings or AI citations, with why each one matters and how to fix it.</p></div>
+  <div class="panel">
+    <div class="row"><button class="btn" id="ta-run">Check site health</button><button class="btn ghost" id="ta-recrawl">Read website again</button><button class="btn ghost" id="ta-csv">Export for developers (CSV)</button><span class="status" id="ta-status" role="status"></span></div>
+    <p class="status" id="ta-meta" style="margin:10px 0 0"></p>
+  </div>
+  <div id="ta-out"></div>
+</section>
+
+<section data-view="gsc" class="hidden">
+  <div class="page-head"><h2>Google search performance</h2><p>Upload your Search Console export to see which searches and pages need attention.</p></div>
+  <div id="gsc-out"></div>
+  <div class="panel">
+    <h2>Upload Search Console data</h2>
+    <details id="gsc-how" open style="margin:8px 0 16px"><summary class="status">How to export from Search Console</summary>
+    <ol class="steps" style="margin-top:10px">
+      <li><span class="n">1</span><span class="t">In Google Search Console, open <b>Performance</b> and choose a date range (e.g. last 3 months).</span></li>
+      <li><span class="n">2</span><span class="t">Click <b>Export → Download CSV</b>. You get a zip file.</span></li>
+      <li><span class="n">3</span><span class="t">Upload the zip here. Upload an earlier period too, to see which pages are declining.</span></li>
+    </ol></details>
+    <div class="grid2" style="margin-bottom:0"><div class="field"><label for="gsc-label">Name this period <span>(e.g. "Jul–Sep 2026")</span></label><input id="gsc-label"></div>
+      <div class="field"><label for="gsc-file">File <span>(.zip or .csv)</span></label><input id="gsc-file" type="file" accept=".zip,.csv"></div></div>
+    <div class="row"><button class="btn" id="gsc-up">Upload</button><span class="status" id="gsc-status" role="status"></span></div>
+    <div id="gsc-imports" style="margin-top:14px"></div>
+  </div>
+</section>
+
+<section data-view="aivis" class="hidden">
+  <div class="page-head"><h2>AI answers</h2><p>Track whether ChatGPT, Gemini, Claude and other assistants recommend you when people ask questions in your field, and what to do when they don't.</p></div>
+  <div class="panel" id="av-runbox">
+    <h2>Questions you track</h2>
+    <p class="lead">Questions your buyers would ask an AI assistant. Don't include your brand name: the point is to see whether AI recommends you without being asked.</p>
+    <div class="grid2" style="margin-bottom:0">
+      <div class="field"><label for="av-add">Add questions <span>(one per line)</span></label><textarea id="av-add" style="min-height:76px" placeholder="What's the best tool to turn a screen recording into an SOP?&#10;How do I create training videos without editing skills?"></textarea>
+        <div class="row" style="margin-top:8px"><button class="btn ghost" id="av-add-btn">Add</button><button class="btn ghost" id="av-ideas-btn">Suggest questions with AI</button><span class="status" id="av-qstatus" role="status"></span></div></div>
+      <div class="field"><label>Ask these assistants</label><div id="av-provs" class="chips" style="margin-top:4px"></div>
+        <p class="status" id="av-est" style="margin:8px 0"></p>
+        <div class="row"><button class="btn" id="av-run">Run all questions</button><span class="status" id="av-rstatus" role="status"></span></div></div>
+    </div>
+    <div id="av-ideas"></div>
+  </div>
+  <div id="av-out"></div>
+  <div class="panel">
+    <details id="av-manual"><summary><b>Log a check you did yourself</b> <span class="status">(for assistants this tool can't ask directly, such as Perplexity, Copilot or Google's AI Overviews)</span></summary>
+      <div class="grid2" style="margin:12px 0 0"><div class="field"><label for="av-prompt">Question you asked</label><input id="av-prompt"></div><div class="field"><label for="av-engine">Assistant</label><select id="av-engine"></select></div></div>
+      <div class="grid3" style="margin-bottom:0"><div class="field"><label for="av-cited">Your link shown <span>(if any)</span></label><input id="av-cited" placeholder="https://"></div>
+        <div class="field"><label for="av-comp">Brands named <span>(comma separated)</span></label><input id="av-comp"></div>
+        <div class="field"><label for="av-date">Date</label><input id="av-date" type="date"></div></div>
+      <div class="row"><label class="check"><input type="checkbox" id="av-mentioned"> Your brand was mentioned</label><button class="btn" id="av-add-manual">Save</button><span class="status" id="av-status" role="status"></span></div>
+    </details>
+  </div>
+</section>
+
+<section data-view="strategy" class="hidden">
+  <div class="page-head"><h2>Content ideas</h2><p>Page ideas grouped into topic clusters, each backed by your own data, plus a plan to get them written.</p></div>
+  <div class="tabs2" role="group" id="st-tabs"><button data-stt="ideas" aria-pressed="true">Ideas</button><button data-stt="review" aria-pressed="false">Site review</button><button data-stt="plan" aria-pressed="false">Content plan</button></div>
+  <div data-stp="ideas">
+    <div class="panel">
+      <div class="row" style="flex-wrap:nowrap"><input id="st-focus" placeholder="Optional focus, e.g. “SOP software for HR teams” or “more comparison pages”" style="flex:1;min-width:0"><button class="btn" id="st-run">Find content ideas</button></div>
+      <p class="status" id="st-status" role="status" style="margin:8px 0 0"></p>
+      <p class="status" id="st-meta" style="margin:6px 0 0"></p>
+    </div>
+    <div id="st-out"></div>
+  </div>
+  <div data-stp="review" class="hidden"><div id="st-review"></div></div>
+  <div data-stp="plan" class="hidden"><div id="st-plan"></div></div>
+</section>
+
+<section data-view="keyword" class="hidden">
+  <div class="page-head"><h2>Check a keyword</h2><p>Before anyone writes: what the searcher wants, what Google currently ranks, and whether you already have a page for it.</p></div>
+  <div class="panel">
+    <div class="row" style="flex-wrap:nowrap"><input id="k-kw" placeholder="e.g. how to create a product demo video" style="flex:1;min-width:0"><button class="btn" id="k-run">Check</button></div>
+    <div class="row" style="margin-top:10px;justify-content:space-between">
+      <label class="check"><input type="checkbox" id="k-research" checked> Research what currently ranks <span class="status">(uses web search, adds about 30 seconds)</span></label>
+      <span class="status" id="k-status" role="status"></span>
+    </div>
+    <div id="k-recent" style="margin-top:12px"></div>
+  </div>
+  <div id="k-out"></div>
+</section>
+
+<section data-view="generate" class="hidden">
+  <div class="page-head"><h2>Write a page</h2><p>Writes a full page that follows Google's rules, then checks, fixes and fact-checks it. You edit, fill in real proof and approve it before publishing.</p></div>
+  <div class="panel">
+    <div class="grid2">
+      <div class="field"><label for="g-kw">Main keyword</label><input id="g-kw" autocomplete="off"><div id="g-kwinfo" class="kwinfo" aria-live="polite"></div></div>
+      <div class="field"><label for="g-author">Author <span>(name and role, required: Google looks for real expertise)</span></label><input id="g-author" list="authors-list" placeholder="e.g. Priya Shah, Head of Product Marketing"><datalist id="authors-list"></datalist></div>
+    </div>
+    <div class="grid3">
+      <div class="field"><label for="g-intent">What the searcher wants</label><select id="g-intent"></select></div>
+      <div class="field"><label for="g-type">Page type</label><select id="g-type"></select></div>
+      <div class="field"><label for="g-aud">Reader</label><input id="g-aud" placeholder="Who is this for?"></div>
+    </div>
+    <div class="field"><label for="g-notes">Your proof and notes <span>(data, customer examples, opinions, product details)</span></label><textarea id="g-notes" placeholder="The more first-hand material you add, the better the page. Anything missing becomes a placeholder for you to fill."></textarea></div>
+    <details class="style-box" id="g-style"><summary><b>Writing style for this website</b> <span class="status" id="g-style-sum"></span></summary>
+      <div class="grid2" style="margin:12px 0 0">
+        <div class="field"><label for="st-tone">Tone of voice</label><input id="st-tone" placeholder="e.g. friendly and direct, like a helpful expert"></div>
+        <div class="field"><label for="st-level">Reading level</label><select id="st-level"><option value="">Not set</option><option>Simple: short sentences, everyday words</option><option>General business readers</option><option>Expert: technical terms are fine</option></select></div>
+        <div class="field"><label for="st-person">Point of view</label><select id="st-person"><option value="">Not set</option><option>second person ("you")</option><option>first person plural ("we") for the company</option><option>third person</option></select></div>
+        <div class="field"><label for="st-spell">Spelling</label><select id="st-spell"><option value="">Not set</option><option>American English</option><option>British English</option><option>Indian English</option></select></div>
+        <div class="field"><label for="st-avoid">Words or phrases to never use</label><input id="st-avoid" placeholder="e.g. revolutionary, seamless, best-in-class"></div>
+        <div class="field"><label for="st-cta">Preferred call to action</label><input id="st-cta" placeholder="e.g. Start a free trial"></div>
+      </div>
+      <div class="field"><label for="st-notes">Other house rules <span>(optional)</span></label><input id="st-notes" placeholder="e.g. Always call our product 'the editor', never 'the tool'"></div>
+      <div class="row"><button class="btn ghost small" id="st-save" type="button">Save style</button><span class="status" id="st-status"></span></div>
+    </details>
+    <div class="row" style="margin-top:14px"><label class="check"><input type="checkbox" id="g-verify" checked> Fact-check claims with web search</label>
+      <label class="check"><input type="checkbox" id="g-override"> Write even if a page for this already exists (not recommended)</label></div>
+    <div class="row" style="margin-top:14px"><button class="btn" id="g-run">Write the page</button><span class="status" id="g-status" role="status"></span></div>
+    <ol class="stepper hidden" id="g-steps" aria-label="Progress">
+      <li data-step="1">Understand the searcher</li><li data-step="2">Plan the page</li><li data-step="3">Write</li><li data-step="4">Check and fix</li><li data-step="5">Fact-check</li>
+    </ol>
+  </div>
+  <div id="g-out"></div>
+</section>
+
+<section data-view="audit" class="hidden">
+  <div class="page-head"><h2>Review a draft</h2><p>Check any page before it goes live: one from a writer or agency, a Google Doc, or a page already on your site. Same rules and scores as pages written here.</p></div>
+  <div class="panel">
+    <div class="tabs2" role="group" id="a-src" style="margin-top:0"><button data-as="paste" aria-pressed="true">Paste</button><button data-as="file" aria-pressed="false">Upload a file</button><button data-as="url" aria-pressed="false">From a URL</button></div>
+    <div data-asp="file" class="hidden"><div class="row" style="margin-bottom:12px"><input type="file" id="a-file" accept=".md,.markdown,.txt,.html,.htm" style="width:auto"><span class="status">Markdown, text or HTML files. For Word or Google Docs, copy the text and paste it into the Paste tab: headings and links are kept.</span></div></div>
+    <div data-asp="url" class="hidden"><div class="row" style="flex-wrap:nowrap;margin-bottom:12px"><input id="a-url" placeholder="https://example.com/blog/your-page" style="flex:1;min-width:0"><button class="btn ghost" id="a-url-load">Load page</button></div><p class="status" style="margin:-4px 0 12px">Works for your own pages and other sites' pages (to compare them). The main content is loaded as text below.</p></div>
+    <div class="field"><label for="a-draft">Draft <span id="a-draft-info">(paste from Google Docs or Word: headings, lists and links are kept)</span></label><textarea id="a-draft" class="md-edit" style="min-height:260px" placeholder="Paste the draft here"></textarea></div>
+    <div class="grid2" style="margin-bottom:0">
+      <div class="field"><label for="a-kw">Keyword it should rank for</label><input id="a-kw" autocomplete="off"><div id="a-kwinfo" class="kwinfo"></div></div>
+      <div class="field"><label for="a-author">Author <span>(optional)</span></label><input id="a-author" list="authors-list" placeholder="Name and role"></div>
+      <div class="field"><label for="a-title">Title tag <span>(optional)</span></label><input id="a-title"></div>
+      <div class="field"><label for="a-meta">Meta description <span>(optional)</span></label><input id="a-meta"></div>
+    </div>
+    <div class="row"><label class="check"><input type="checkbox" id="a-verify"> Fact-check claims with web search</label></div>
+    <div class="row" style="margin-top:12px"><button class="btn" id="a-run">Review draft</button><span class="status" id="a-status" role="status"></span></div>
+    <div id="a-recent" style="margin-top:12px"></div>
+  </div>
+  <div id="a-out"></div>
+</section>
+
+<section data-view="urlmap" class="hidden">
+  <div class="page-head"><h2>Keywords</h2><p>Every keyword you care about, whether you already have a page for it, and which page should own it.</p></div>
+  <div class="tabs2" role="tablist" id="kw-tabs">
+    <button role="tab" aria-pressed="true" data-kt="list">My keywords</button>
+    <button role="tab" aria-pressed="false" data-kt="ideas">Find ideas</button>
+    <button role="tab" aria-pressed="false" data-kt="clusters">Topic clusters</button>
+    <button role="tab" aria-pressed="false" data-kt="compete">Competing pages</button>
+  </div>
+
+  <div data-kp="list">
+    <div id="kw-summary"></div>
+    <div class="panel">
+      <div class="grid2" style="margin-bottom:0">
+        <div class="field"><label for="kw-add">Add keywords <span>(one per line)</span></label><textarea id="kw-add" style="min-height:70px" placeholder="sop software&#10;how to write an sop"></textarea>
+          <div class="row" style="margin-top:8px"><button class="btn" id="kw-add-btn">Add</button></div></div>
+        <div class="field"><label for="kw-file">Or import a file <span>(Ahrefs, Semrush, Keyword Planner or a plain list)</span></label><input id="kw-file" type="file" accept=".csv,.tsv,.txt">
+          <div class="row" style="margin-top:8px"><button class="btn ghost" id="kw-import">Import</button><button class="btn ghost" id="kw-export">Export CSV</button></div></div>
+      </div>
+      <span class="status" id="kw-status" role="status"></span>
+    </div>
+    <div class="panel">
+      <div class="row" style="margin-bottom:12px">
+        <input id="kw-q" placeholder="Search keywords" style="flex:1;min-width:180px">
+        <select id="kw-f-cov" style="width:auto"><option value="">All coverage</option><option value="gap">No page yet</option><option value="partial">Partly covered</option><option value="covered">Has a page</option></select>
+        <select id="kw-f-intent" style="width:auto"><option value="">All intents</option></select>
+        <select id="kw-f-action" style="width:auto"><option value="">All actions</option></select>
+        <select id="kw-sort" style="width:auto"><option value="opportunity">Sort: opportunity</option><option value="volume">Sort: volume</option><option value="keyword">Sort: A–Z</option><option value="recent">Sort: newest</option></select>
+      </div>
+      <div class="row hidden" id="kw-bulk" style="background:var(--soft);padding:8px 12px;border-radius:10px;margin-bottom:10px">
+        <b id="kw-bulk-n"></b>
+        <select id="kw-bulk-action" style="width:auto"><option value="">Set action…</option></select>
+        <select id="kw-bulk-value" style="width:auto"><option value="">Set value…</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+        <button class="btn ghost small" id="kw-bulk-del">Remove</button><button class="btn ghost small" id="kw-bulk-clear">Clear selection</button>
+      </div>
+      <div id="kw-out"></div>
+    </div>
+  </div>
+
+  <div data-kp="ideas" class="hidden">
+    <div class="panel">
+      <h2>Find keyword ideas</h2>
+      <p class="lead">Enter a topic. The AI suggests searches your buyers make that fit what you sell, and each idea is checked against your existing pages straight away.</p>
+      <div class="grid2" style="margin-bottom:0"><div class="field"><label for="ki-seed">Topic or seed keyword</label><input id="ki-seed" placeholder="e.g. sop creation"></div>
+        <div class="field"><label for="ki-focus">Focus <span>(optional: audience, industry, stage)</span></label><input id="ki-focus" placeholder="e.g. HR teams in mid-size companies"></div></div>
+      <div class="row"><button class="btn" id="ki-run">Find ideas</button><span class="status" id="ki-status" role="status"></span></div>
+      <div id="ki-out"></div>
+    </div>
+  </div>
+
+  <div data-kp="clusters" class="hidden">
+    <div class="panel">
+      <h2>Topic clusters</h2>
+      <p class="lead">Keywords that one page should target together. Write <b>one strong page per cluster</b>, not one page per keyword: lots of near-identical pages is exactly what Google's scaled-content policy penalises.</p>
+      <div id="kc-out"><p class="status spin">Grouping keywords…</p></div>
+    </div>
+  </div>
+
+  <div data-kp="compete" class="hidden">
+    <div class="panel">
+      <h2>Pages competing with each other</h2>
+      <p class="lead">Pages on your site that target the same topic with the same intent. Google may split attention between them, so pick one main page.</p>
+      <div class="row"><button class="btn ghost" id="um-load">Find competing pages</button><button class="btn" id="um-review">Suggest fixes</button><span class="status" id="um-status" role="status"></span></div>
+      <div id="um-out"></div>
+    </div>
+  </div>
+</section>
+
+<section data-view="library" class="hidden">
+  <div class="page-head"><h2>My pages</h2><p>Every page written for this website.</p></div>
+  <div class="panel"><div id="lib-out"></div></div>
+</section>
+
+<section data-view="settings" class="hidden">
+  <div class="page-head"><h2>AI &amp; data</h2><p>Choose your AI provider and paste your API key. The key stays in this browser and is sent only to the provider you choose.</p></div>
+  <div class="panel">
+    <h2>1. Choose your AI provider</h2>
+    <div class="grid4" style="margin-top:12px" id="prov-cards"></div>
+    <div id="prov-form">
+      <div class="grid2" style="margin-bottom:0">
+        <div class="field"><label for="set-key">API key <span id="set-keyhelp"></span></label>
+          <div class="row" style="flex-wrap:nowrap"><input id="set-key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your API key"><button class="btn ghost small" id="set-show" type="button">Show</button></div></div>
+        <div class="field"><label for="set-model">Model <span>(click "Load models" to see what your key can use)</span></label>
+          <div class="row" style="flex-wrap:nowrap"><select id="set-model"></select><button class="btn ghost small" id="set-load" type="button">Load models</button></div></div>
+      </div>
+      <div class="row" style="gap:18px;margin-bottom:12px">
+        <label class="check"><input type="checkbox" id="set-web" checked> Use web search for fact-checking and AI-answer checks</label>
+        <label class="check"><input type="checkbox" id="set-remember" checked> Remember my key on this device</label>
+      </div>
+      <div class="row"><button class="btn" id="set-save">Save</button><button class="btn ghost" id="set-test">Test connection</button><span class="status" id="set-status" role="status"></span></div>
+      <p class="status" style="margin-top:12px">Your key is stored only in this browser and sent directly to the provider. Don't save keys on shared computers: untick "Remember" and the key is forgotten when you close the tab. Usage is billed to your own account.</p>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>2. Your data</h2>
+    <p class="lead">Websites, keywords, pages and reports are saved in this browser only. Back them up to move to another computer or share with a colleague.</p>
+    <div class="row"><button class="btn ghost" id="data-export">Download backup</button>
+      <label class="btn ghost" for="data-import" style="cursor:pointer">Restore from backup</label><input type="file" id="data-import" accept=".json" class="hidden">
+      <button class="btn ghost" id="data-clear">Delete all data</button><span class="status" id="data-status" role="status"></span></div>
+  </div>
+  <div class="panel">
+    <h2>3. Crawl token <span class="pill">optional</span></h2>
+    <p class="lead">If whoever deployed this site set a <code>CRAWL_TOKEN</code> on Netlify, enter it here so you can read websites.</p>
+    <div class="row" style="flex-wrap:nowrap;max-width:520px"><input id="set-token" type="password" autocomplete="off" placeholder="Crawl token"><button class="btn ghost" id="set-token-save">Save</button></div>
+  </div>
+</section>
+
+<section data-view="rules" class="hidden">
+  <div class="page-head"><h2>Rules</h2><p>The Google guidance built into every page this engine writes.</p></div>
+  <div class="panel"><div id="rules-out"></div></div>
+</section>
+
+</main>
+</div>
+
+<script src="vendor/marked.min.js"></script>
+<script src="vendor/jszip.min.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "name": "content-engine",
+  "version": "4.0.0",
+  "private": true,
+  "description": "SEO content planning, writing and measurement that follows Google's rules. Bring your own Claude, ChatGPT or Gemini API key.",
+  "type": "module",
+  "scripts": {
+    "preview": "node tests/dev-server.mjs 8888"
+  },
+  "engines": { "node": ">=18" }
+}
