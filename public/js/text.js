@@ -2,15 +2,44 @@
 import { INTENTS, GUARDRAILS } from "./rules.js";
 
 const ORDER = ["navigational", "transactional", "commercial", "how_to", "informational"];
+// words that appear in many informational titles too ("free guide", "photo editor tips"): weak evidence only
+const WEAK = new Set(["tool", "software", "app", "generator", "translator", "maker", "editor", "recorder", "converter", "creator", "online", "free", "examples", "ideas", "benefits", "guide", "review"]);
+// the URL is the strongest clue to a page's purpose; these patterns cover SaaS, shops, local businesses, docs and publishers
+const URL_HINTS = [
+  [/\/(products?|collections?|shop|store|category|categories|cart|checkout|buy)(\/|$|-)/, "transactional"],
+  [/\/(pricing|plans|signup|sign-up|register|free-trial|demo|book|booking|appointments?|quote|order|menu|reserve|reservations?)(\/|$|-)/, "transactional"],
+  [/\/(features?|tools?|apps?|integrations?|plugins?|themes?|extensions?|downloads?|templates?)(\/|$)/, "transactional"],
+  [/\/(compare|comparison|alternatives?|vs|reviews?|competitors?)(\/|$|-)|-vs-|\/(best|top)-/, "commercial"],
+  [/\/(solutions?|use-?cases?|customers?|customer-stories|success-stories|case-stud(y|ies)|testimonials|industr(y|ies))(\/|$)/, "commercial"],
+  [/\/(how-to|tutorials?|docs|documentation|kb|knowledge-base|help|manuals?|guides\/how)(\/|$|-)/, "how_to"],
+  [/\/(blog|news|articles?|learn|resources|insights|glossary|wiki|magazine|stories|guides?)(\/|$)/, "informational"],
+  [/\/(contact|about|login|log-in|sign-in|careers|jobs|support)(\/|$|-)/, "navigational"],
+  // other languages (Spanish, Portuguese, French, German, Italian)
+  [/\/(productos?|produtos?|produits?|produkte?|prodotti|tienda|loja|boutique|shop|negozio|categoria|categorias|kategorie|carrito|panier|warenkorb|carrello)(\/|$|-)/, "transactional"],
+  [/\/(precios|tarifas|precos|precos|prix|tarifs|preise|prezzi|planes|planos|reservar|reserva|reservation|buchen|prenota|presupuesto|orcamento|devis|angebot|preventivo|comprar|acheter|kaufen|acquista)(\/|$|-)/, "transactional"],
+  [/\/(comparativa|comparacion|comparar|alternativas?|comparatif|vergleich|confronto|casos-de-(exito|uso)|casos-de-sucesso|temoignages|referenzen|testimonianze)(\/|$|-)/, "commercial"],
+  [/\/(como-|como\/|tutoriales?|tutoriais|tutoriels?|anleitung|guida-|ayuda|ajuda|aide|hilfe|aiuto|documentacion|documentacao)/, "how_to"],
+  [/\/(noticias|articulos|artigos|articles|actualites|nachrichten|notizie|recursos|ressources|ratgeber|risorse|guia|guias|guide|leitfaden|glosario|glossario|glossaire|lexikon)(\/|$)/, "informational"],
+  [/\/(contacto|contato|kontakt|contatti|sobre-nosotros|quienes-somos|sobre|a-propos|uber-uns|chi-siamo|empleo|carreras|carreiras|karriere|lavora-con-noi)(\/|$|-)/, "navigational"],
+];
+const GENERIC = /(solutions?|use-?cases?|customers?|industr|features?|tools?|apps?|integrations?|plugins?|themes?|extensions?|templates?|downloads?|blog|news|articles?|learn|resources|insights|guides?|stories|magazine|recursos|noticias|articulos)/;
+// intent words in other languages (titles and keywords)
+const MULTI = {
+  how_to: ["cómo ", "como ", "comment ", "wie ", "come ", "hoe ", "tutorial", "方法", "やり方", "使い方", "手順", "如何", "教程", "कैसे"],
+  informational: ["qué es", "que es", "o que é", "qu'est-ce", "was ist", "cos'è", "wat is", "とは", "什么是", "क्या है", "guía", "guia", "guide", "leitfaden", "ejemplos", "exemples", "beispiele"],
+  commercial: ["mejor", "mejores", "melhor", "melhores", "meilleur", "meilleurs", "beste", "migliore", "migliori", "comparativa", "comparación", "comparatif", "vergleich", "alternativas", "alternatives", "おすすめ", "比較", "ランキング", "最佳", "推荐", "सबसे अच्छा", "reseña", "avis", "test "],
+  transactional: ["precio", "precios", "preço", "preços", "prix", "tarif", "preis", "preise", "prezzo", "prezzi", "comprar", "acheter", "kaufen", "acquista", "gratis", "gratuit", "kostenlos", "gratuito", "descargar", "télécharger", "料金", "価格", "購入", "無料", "ダウンロード", "价格", "免费", "下载", "कीमत", "खरीद", "मुफ्त"],
+  navigational: ["iniciar sesión", "connexion", "anmelden", "accedi", "inloggen", "ログイン", "登录", "लॉगिन"],
+};
 export function classify(text, url = "") {
-  const t = " " + (text || "").toLowerCase() + " ", path = (url || "").toLowerCase();
+  const t = " " + (text || "").toLowerCase() + " ";
+  let path = ""; try { path = new URL(url).pathname.toLowerCase(); } catch { path = (url || "").toLowerCase(); }
   const scores = Object.fromEntries(Object.keys(INTENTS).map(k => [k, 0]));
-  for (const [k, v] of Object.entries(INTENTS)) for (const s of v.signals) if (t.includes(s)) scores[k] += s.length > 4 ? 2 : 1;
-  const hints = { "/blog": "informational", "/glossary": "informational", "/tutorial": "how_to", "/how-to": "how_to", "/guide": "informational",
-    "/compare": "commercial", "-vs-": "commercial", "/alternatives": "commercial", "/competitor": "commercial", "/pricing": "transactional",
-    "/features": "transactional", "/tools": "transactional", "/solutions": "commercial", "/usecases": "commercial", "/use-case": "commercial",
-    "/customer": "commercial", "/docs": "navigational", "/help": "how_to", "/support": "navigational" };
-  for (const [h, k] of Object.entries(hints)) if (path.includes(h)) scores[k] += 2;
+  for (const [k, v] of Object.entries(INTENTS)) for (const sig of v.signals) if (t.includes(sig)) scores[k] += WEAK.has(sig.trim()) ? 1 : sig.trim().includes(" ") ? 3 : sig.length > 4 ? 2 : 1;
+  for (const [k, list] of Object.entries(MULTI)) for (const sig of list) if (t.includes(sig)) scores[k] += sig.trim().includes(" ") || /[^\x00-\u024f]/.test(sig) ? 3 : 2;
+  // unambiguous URLs (a cart, a pricing page, /compare/, /how-to/) are strong evidence; generic sections (/solutions/, /features/, /blog/)
+  // are only a hint, so a clear title like "How to..." still wins
+  for (const [re, k] of URL_HINTS) if (re.test(path)) { scores[k] += GENERIC.test(path.match(re)?.[0] || "") ? 2 : 5; break; }
   let best = ORDER[0];
   for (const k of ORDER) if (scores[k] > scores[best]) best = k;
   return scores[best] > 0 ? best : "informational";
@@ -24,9 +53,22 @@ const STOP = new Set("a an the and or of to for in on with by at from is are be 
 const SYN = { create: "make", build: "make", produce: "make", creating: "make", making: "make", made: "make", tool: "software", app: "software",
   platform: "software", tutorial: "guide", record: "recording", recorder: "recording", translator: "translate", translation: "translate",
   translating: "translate", documentation: "doc", document: "doc", docs: "doc" };
+// Japanese and Chinese have no spaces: runs of their characters become overlapping two-character pieces (bigrams),
+// the standard way search engines match them
+const CJK_RUN = /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+/g;
+const PARTICLES = new Set(["の", "は", "が", "を", "に", "で", "と", "も", "へ", "や", "か", "な", "た", "て", "し", "る", "す", "ま", "ん", "い", "う", "え", "お", "れ", "ら", "的", "了", "和", "是", "在"]);
+function cjkBigrams(run) {
+  // split at grammar particles (の, は, を…) so pieces never join characters that weren't next to each other
+  const out = []; let seg = [];
+  const flush = () => { if (seg.length === 1) out.push(seg[0]); for (let i = 0; i + 1 < seg.length; i++) out.push(seg[i] + seg[i + 1]); seg = []; };
+  for (const c of run) { if (PARTICLES.has(c)) flush(); else seg.push(c); }
+  flush(); return out;
+}
 export function tokens(s) {
   s = (s || "").toLowerCase().replace(/[-_/]/g, " ");
   const out = [];
+  for (const run of s.match(CJK_RUN) || []) out.push(...cjkBigrams(run));
+  s = s.replace(CJK_RUN, " ");
   for (let w of s.match(/[a-z0-9\u00c0-\uffff]+/g) || []) {
     if (STOP.has(w) || w.length < 2) continue;
     if (w.length > 4 && w.endsWith("s") && !w.endsWith("ss")) w = w.slice(0, -1);
@@ -48,7 +90,13 @@ function pageDoc(p) {
 const counter = arr => { const m = new Map(); for (const x of arr) m.set(x, (m.get(x) || 0) + 1); return m; };
 
 // Build the page index once, then match many keywords against it cheaply.
+// The index is cached per page list: the store returns the same array until pages change, so repeat calls are free.
+const IX_CACHE = new WeakMap();
 export function buildIndex(pages) {
+  let ix = IX_CACHE.get(pages); if (ix) return ix;
+  ix = buildIndexUncached(pages); IX_CACHE.set(pages, ix); return ix;
+}
+function buildIndexUncached(pages) {
   const docs = pages.map(p => counter(pageDoc(p))), n = docs.length;
   const df = new Map(); for (const d of docs) for (const t of d.keys()) df.set(t, (df.get(t) || 0) + 1);
   const idf = t => Math.log((n + 1) / ((df.get(t) || 0) + 1)) + 1;
@@ -79,8 +127,13 @@ export function findMatches(keyword, pages, top = 8) { return matchIndex(buildIn
 
 // Coverage of one keyword by the existing site: covered / partial / gap
 export function coverage(ix, keyword, intent) {
+  const it = intent || classify(keyword), ck = keyword + "|" + it;
+  const cache = ix._cov || (ix._cov = new Map());   // results live with the (cached) index, so they reset when pages change
+  if (cache.has(ck)) return { ...cache.get(ck) };
+  const r = coverageUncached(ix, keyword, it); cache.set(ck, r); return { ...r };
+}
+function coverageUncached(ix, keyword, it) {
   const m = matchIndex(ix, keyword, 3), best = m[0];
-  const it = intent || classify(keyword);
   if (!best) return { status: "gap", url: "", title: "", similarity: 0 };
   const status = best.similarity >= GUARDRAILS.block_if_same_intent_page_exists_similarity && best.intent === it ? "covered"
     : best.similarity >= GUARDRAILS.warn_similarity ? "partial" : "gap";
@@ -136,7 +189,12 @@ export function verdict(keyword, matches) {
 const LANG_RE = /^[a-z]{2}(-[a-z]{2})?$/;
 export function langOf(url) { const parts = pathOf(url).split("/").filter(Boolean); return parts[0] && LANG_RE.test(parts[0].toLowerCase()) ? parts[0].toLowerCase() : ""; }
 
+const SG_CACHE = new WeakMap();
 export function siteGroups(pages, threshold = 0.6, maxGroups = 60) {
+  const c = SG_CACHE.get(pages); if (c && c.k === threshold + "|" + maxGroups) return c.v;
+  const v = siteGroupsUncached(pages, threshold, maxGroups); SG_CACHE.set(pages, { k: threshold + "|" + maxGroups, v }); return v;
+}
+function siteGroupsUncached(pages, threshold, maxGroups) {
   const n = pages.length; if (n < 2) return [];
   const tdf = counter(pages.flatMap(p => [...new Set(tokens(p.title))]));
   const common = new Set([...tdf].filter(([, c]) => c / n > 0.6).map(([t]) => t));
@@ -189,3 +247,8 @@ export function siteGroups(pages, threshold = 0.6, maxGroups = 60) {
   }
   return out.sort((a, b) => b.size - a.size || b.max_similarity - a.max_similarity).slice(0, maxGroups);
 }
+
+// a page's first ~2,500 characters of text (old pages stored it as text_snip)
+export const pageText = p => p ? (p.text_snip || ((p.excerpt || "") + (p.text_more || ""))) : "";
+// a page's links inside the content as [{url, text}] (stored as [position in links_out, text]; old pages stored objects)
+export const mainLinks = p => !p || !Array.isArray(p.links_main) ? null : p.links_main.map(l => Array.isArray(l) ? { url: (p.links_out || [])[l[0]], text: l[1] } : l).filter(l => l && l.url);

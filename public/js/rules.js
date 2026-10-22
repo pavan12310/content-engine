@@ -29,17 +29,28 @@ export const HIGH_RISK_PAGE_TYPES = {
   location_language_copy: "Truly localised or native-reviewed content for real markets; never swapped words only.",
   faq_farm: "Group FAQs on a real page; never one thin page per question.",
   off_topic: "Avoid unless the publisher has genuine expertise.",
+  location_page: "Only for a real branch or genuinely local service, with real local details; never near-identical pages for each town (doorway pages).",
+  review: "Only products you actually tested, with evidence (photos, measurements, how you tested); Google's reviews system rewards first-hand testing.",
 };
 export const PAGE_TYPES = ["blog_post", "how_to_guide", "pillar_guide", "comparison", "alternatives", "listicle",
-  "glossary", "landing_page", "use_case", "case_study", "help_article"];
+  "glossary", "landing_page", "use_case", "case_study", "help_article", "product_page", "category_page", "service_page", "location_page", "news_article", "review"];
+// plain names, grouped for the page-type menu
+export const PAGE_TYPE_LABELS = { blog_post: "Blog post", how_to_guide: "How-to guide", pillar_guide: "In-depth guide (pillar)", comparison: "Comparison (X vs Y)", alternatives: "Alternatives",
+  listicle: "List (best X)", glossary: "Glossary / definition", landing_page: "Landing page", use_case: "Use case", case_study: "Case study", help_article: "Help article",
+  product_page: "Product page", category_page: "Category page", service_page: "Service page", location_page: "Location page", news_article: "News article", review: "Review (first-hand testing)" };
+export const PAGE_TYPE_GROUPS = [["Articles and guides", ["blog_post", "how_to_guide", "pillar_guide", "glossary", "help_article"]], ["Comparing and buying", ["comparison", "alternatives", "listicle", "review", "landing_page", "use_case", "case_study"]],
+  ["Online store", ["product_page", "category_page"]], ["Services and local", ["service_page", "location_page"]], ["News", ["news_article"]]];
+// the page types that suit each type of website, best first (used to suggest a page type)
+export const TYPE_SUGGESTIONS = { ecommerce: ["product_page", "category_page", "how_to_guide", "listicle", "review"], local: ["service_page", "location_page", "how_to_guide", "blog_post"],
+  publisher: ["news_article", "review", "blog_post", "how_to_guide", "listicle"], agency: ["service_page", "case_study", "blog_post", "how_to_guide"] };
 export const INTENTS = {
-  informational: { label: "Learn / understand", formats: ["explainer", "pillar_guide", "blog_post", "glossary"],
+  informational: { label: "Learn / understand", formats: ["explainer", "pillar_guide", "blog_post", "glossary", "news_article"],
     signals: ["what is", "what are", "why", "meaning", "definition", "examples", "ideas", "benefits", "guide", "explained", "vs what"] },
   how_to: { label: "Do a task", formats: ["how_to_guide", "help_article"],
     signals: ["how to", "how do", "how can", "step by step", "steps to", "tutorial", "set up", "setup", "install", "walkthrough", "guide to"] },
-  commercial: { label: "Compare / evaluate before buying", formats: ["comparison", "alternatives", "listicle", "use_case"],
+  commercial: { label: "Compare / evaluate before buying", formats: ["comparison", "alternatives", "listicle", "use_case", "review", "category_page"],
     signals: ["best", "top", " vs ", "versus", "alternative", "alternatives", "compare", "comparison", "review", "reviews", "pricing vs"] },
-  transactional: { label: "Buy / sign up / use now", formats: ["landing_page"],
+  transactional: { label: "Buy / sign up / use now", formats: ["landing_page", "product_page", "category_page", "service_page", "location_page"],
     signals: ["buy", "pricing", "price", "free trial", "download", "sign up", "signup", "book a demo", "tool", "software", "app", "generator", "translator", "maker", "editor", "recorder", "converter", "creator", "online", "free"] },
   navigational: { label: "Find a specific brand or page", formats: ["landing_page", "help_article"],
     signals: ["login", "log in", "sign in", "contact us", "customer support", "help center", "careers", "about us"] },
@@ -50,7 +61,8 @@ export const SEO = {
   faq_min: 3, faq_max: 6,
   max_phrase_per_100_words: 1.2, max_phrase_per_sentence: 1, max_exact_match_anchor_share: 0.5,
   min_words: { blog_post: 900, how_to_guide: 700, pillar_guide: 1800, comparison: 1200, alternatives: 1200, listicle: 1000,
-    glossary: 500, landing_page: 400, use_case: 700, case_study: 700, help_article: 300 },
+    glossary: 500, landing_page: 400, use_case: 700, case_study: 700, help_article: 300,
+    product_page: 300, category_page: 250, service_page: 500, location_page: 500, news_article: 400, review: 1000 },
   paragraph_max_words: 90,
 };
 export const PLACEHOLDER_RE = /\[(ADD|SOURCE|SCREENSHOT|DATA|QUOTE|EXPERT|EXAMPLE)[^\]]*\]/g;
@@ -76,6 +88,12 @@ export const MUST_PASS = [0, 1, 2];
 export const GUARDRAILS = { max_generations_per_site_per_day: 10, block_if_same_intent_page_exists_similarity: 0.7,
   warn_similarity: 0.4, require_author: true, require_information_gain: true };
 export const STRUCTURES = {
+  product: ["Short summary: what it is and who it's for", "Key specifications (a table)", "Sizing, fit or compatibility", "Materials, care or what's in the box", "Shipping, delivery and returns", "What customers say (real reviews only, never invented)", "FAQ"],
+  category: ["Short intro (50-150 words): what's in this category and how to choose", "(Your product grid goes here, from your store)", "How to choose: a short buying guide", "FAQ"],
+  service: ["What the service is and who it's for", "What's included", "How it works (the process, step by step)", "Prices or price range", "Results and proof (real projects or customers)", "Area served or availability", "FAQ", "Next step: call, book or request a quote"],
+  location: ["This location: address, opening hours, parking or how to get there", "Services at this location", "The local team", "Local proof: projects or customers nearby", "Area served", "FAQ for this area", "Book or contact this location"],
+  news: ["What happened (lead: who, what, when, where)", "Why it matters", "Details and context", "What people said (attributed quotes only)", "What happens next", "Sources"],
+  review: ["Verdict up front", "How we tested (first-hand: duration, conditions, measurements)", "Specifications", "What we liked", "What we didn't like", "Who it's for and who should skip it", "Alternatives worth considering", "Final verdict"],
   best_x: ["Quick answer: top picks by use case", "Comparison table", "How we evaluated (criteria + method)", "Detailed reviews (strengths, limits, pricing)", "Pricing overview", "Which to choose by user type", "FAQ"],
   how_to: ["Direct answer (what you'll do, time needed)", "What you need before starting", "Step-by-step instructions with screenshots", "Example / template", "Common mistakes", "Troubleshooting", "Next steps", "FAQ"],
   x_vs_y: ["Quick verdict", "Comparison table", "X overview", "Y overview", "Feature-by-feature comparison", "Pricing", "Use cases: when to pick each", "Which should you choose?", "FAQ"],
@@ -86,6 +104,8 @@ export const STRUCTURES = {
 };
 export function structureFor(keyword, intent, pageType) {
   const k = keyword.toLowerCase();
+  const byType = { product_page: "product", category_page: "category", service_page: "service", location_page: "location", news_article: "news", review: "review" };
+  if (byType[pageType]) return byType[pageType];
   if (pageType === "comparison" || ` ${k} `.includes(" vs ") || k.includes("versus")) return "x_vs_y";
   if (["listicle", "alternatives"].includes(pageType) || k.startsWith("best ") || k.startsWith("top ") || k.includes("alternative")) return "best_x";
   if (k.includes("template") || k.includes("checklist")) return "template";
@@ -139,7 +159,7 @@ export function rulesSummary() {
   return { version: RULES_VERSION, principles: CORE_PRINCIPLES, spam_patterns: SPAM_PATTERNS, high_risk_page_types: HIGH_RISK_PAGE_TYPES,
     intents: Object.fromEntries(Object.entries(INTENTS).map(([k, v]) => [k, v.label])),
     intent_formats: Object.fromEntries(Object.entries(INTENTS).map(([k, v]) => [k, v.formats])),
-    page_types: PAGE_TYPES, seo: SEO, scorecard: SCORECARD, guardrails: GUARDRAILS, structures: STRUCTURES,
+    page_types: PAGE_TYPES, page_type_labels: PAGE_TYPE_LABELS, page_type_groups: PAGE_TYPE_GROUPS, type_suggestions: TYPE_SUGGESTIONS, seo: SEO, scorecard: SCORECARD, guardrails: GUARDRAILS, structures: STRUCTURES,
     satisfaction_factors: SATISFACTION_FACTORS, source_tiers: SOURCE_TIERS, spam_risk_checks: SPAM_RISK_CHECKS,
     release_gate: RELEASE_GATE, url_actions: URL_ACTIONS };
 }
@@ -154,3 +174,18 @@ export const GOOGLE_UPDATES = [
   { name: "August 2026 spam update", type: "spam", start: "2026-08-18", end: "2026-08-21" },
   { name: "September 2026 spam update", type: "spam", start: "2026-09-24", end: "2026-10-08" },
 ];
+
+// What kind of website this is changes what a good page looks like. "ymyl" types (health, money, legal) need the strictest care:
+// Google's guidelines call these "Your Money or Your Life" topics.
+export const BUSINESS_TYPES = {
+  saas: { label: "Software / SaaS", cta: "start a trial, book a demo, or see pricing", guidance: "Show the workflow with screenshots, be honest about limits, compare fairly with alternatives, and match calls to action to the funnel stage." },
+  ecommerce: { label: "Online store", cta: "view the product, choose a size or variant, add to cart", guidance: "Include specifications, sizing or fit, materials, care, shipping, returns and real reviews; write unique descriptions (never copy manufacturer text); category pages need a short helpful intro, not a wall of keywords." },
+  local: { label: "Local business or services", cta: "call, get directions, book an appointment, or request a quote", guidance: "Be specific about the area served, opening hours, prices or price ranges and what to expect. Never create near-identical pages for each town (doorway pages); only create a location page when there is a real branch or genuinely local content." },
+  publisher: { label: "Publisher, blog or media", cta: "read a related article or subscribe", guidance: "Lead with original reporting, analysis or first-hand testing; credit sources; date and update articles; avoid rewriting what others published." },
+  agency: { label: "Agency or professional services", cta: "see case studies or book a consultation", guidance: "Prove expertise with real case studies, named experts and specific results; explain the process and who it is for." },
+  education: { label: "Education, nonprofit or community", cta: "learn more, enrol, donate or get involved", guidance: "Be accurate and accessible, cite authoritative sources, and state clearly who the organisation is and who runs it." },
+  health: { label: "Health or medical", ymyl: true, cta: "book an appointment or talk to a professional", guidance: "This is a 'Your Money or Your Life' topic: content must be reviewed by a qualified medical professional (name and credentials), cite authoritative medical sources, never diagnose or replace professional advice, and avoid unsupported claims." },
+  finance: { label: "Finance, insurance or investing", ymyl: true, cta: "talk to an adviser, compare options, or get a quote", guidance: "This is a 'Your Money or Your Life' topic: content must be reviewed by a qualified professional, cite official sources (regulators, official rates), state dates for figures, disclose risks and conflicts, and never promise returns." },
+  legal: { label: "Legal", ymyl: true, cta: "book a consultation", guidance: "This is a 'Your Money or Your Life' topic: content must be reviewed by a qualified lawyer, say which jurisdiction it applies to, cite official sources, and make clear it is general information, not legal advice." },
+  other: { label: "Other", cta: "take the most useful next step", guidance: "" },
+};

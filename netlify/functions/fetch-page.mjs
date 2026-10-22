@@ -3,6 +3,8 @@
 // Safety: GET only, http(s) only, no private/internal addresses, 3 MB cap, 9 s timeout,
 // HTML/XML/text only, and an optional shared token (set CRAWL_TOKEN in Netlify to require it).
 import dns from "node:dns/promises";
+import https from "node:https";
+import http from "node:http";
 import net from "node:net";
 
 const MAX_BYTES = 3 * 1024 * 1024;
@@ -23,6 +25,7 @@ async function safeUrl(raw) {
   try { u = new URL(raw); } catch { return "Invalid URL"; }
   if (!["http:", "https:"].includes(u.protocol)) return "Only http and https URLs are allowed";
   if (u.username || u.password) return "URLs with credentials are not allowed";
+  if (process.env.FETCH_ALLOW_LOCAL === "1") return null;   // local testing only; never set this on Netlify
   const host = u.hostname.replace(/^\[|\]$/g, "");
   if (/^(localhost|.*\.local|.*\.internal)$/i.test(host)) return "Internal hosts are not allowed";
   try {
@@ -32,6 +35,20 @@ async function safeUrl(raw) {
   return null;
 }
 
+// Fallback for sites whose response headers are bigger than fetch() allows (UND_ERR_HEADERS_OVERFLOW): same limits, larger header allowance
+function rawGet(url, timeoutMs, maxBytes) {
+  return new Promise((resolve, reject) => {
+    const mod = url.startsWith("https:") ? https : http;
+    const req = mod.get(url, { headers: { "user-agent": UA, accept: "text/html,application/xhtml+xml,application/xml,text/plain;q=0.9,*/*;q=0.5" }, maxHeaderSize: 131072, timeout: timeoutMs }, res => {
+      const chunks = []; let size = 0, truncated = false;
+      res.on("data", c => { if (truncated) return; size += c.length; if (size > maxBytes) { truncated = true; res.destroy(); } else chunks.push(c); });
+      const done = () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks), truncated });
+      res.on("end", done); res.on("close", done); res.on("error", e => truncated ? done() : reject(e));
+    });
+    req.on("timeout", () => req.destroy(Object.assign(new Error("timeout"), { name: "AbortError" })));
+    req.on("error", reject);
+  });
+}
 const json = (status, body) => new Response(JSON.stringify(body), {
   status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 
@@ -39,7 +56,11 @@ export default async (req) => {
   if (req.method !== "GET") return json(405, { error: "GET only" });
   const params = new URL(req.url).searchParams;
   const token = process.env.CRAWL_TOKEN;
-  if (token && params.get("token") !== token && req.headers.get("x-crawl-token") !== token)
+  const session = (req.headers.get("cookie") || "").match(/(?:^|;\s*)ce_session=([^;]+)/);
+  const { readToken, enabled: accountsOn } = await import("./_lib/auth.mjs");
+  const signedIn = accountsOn() && session && !!readToken(session[1]);
+  if (accountsOn() && !signedIn && !(token && (params.get("token") === token || req.headers.get("x-crawl-token") === token))) return json(401, { error: "Please sign in to read websites." });
+  if (!signedIn && token && params.get("token") !== token && req.headers.get("x-crawl-token") !== token)
     return json(401, { error: "Crawl token required (set it in the app's Settings)" });
   let target = params.get("url") || "";
   // follow redirects manually so every hop is checked
@@ -54,6 +75,15 @@ export default async (req) => {
         headers: { "user-agent": UA, accept: "text/html,application/xhtml+xml,application/xml,text/plain;q=0.9,*/*;q=0.5" } });
     } catch (e) {
       clearTimeout(timer);
+      if (e?.cause?.code === "UND_ERR_HEADERS_OVERFLOW") {   // very large response headers: retry with the low-level client
+        try {
+          const rr = await rawGet(target, 9000, MAX_BYTES);
+          if ([301, 302, 303, 307, 308].includes(rr.status) && rr.headers.location) { target = new URL(rr.headers.location, target).toString(); continue; }
+          const type = String(rr.headers["content-type"] || "");
+          if (!/html|xml|text\/plain|gzip|octet-stream/i.test(type)) return json(200, { url: target, status: rr.status, contentType: type, error: "not an HTML/XML page" });
+          return json(200, { url: target, status: rr.status, contentType: type, truncated: rr.truncated, body: rr.body.toString("utf8") });
+        } catch (e2) { return json(200, { url: target, status: 0, error: e2.name === "AbortError" ? "timeout" : "no response" }); }
+      }
       return json(200, { url: target, status: 0, error: e.name === "AbortError" ? "timeout" : "no response" });
     }
     if ([301, 302, 303, 307, 308].includes(r.status) && r.headers.get("location")) {

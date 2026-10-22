@@ -7,5 +7,10 @@
   "scripts": {
     "preview": "node tests/dev-server.mjs 8888"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@netlify/blobs": "11.1.1"
+  }
 }

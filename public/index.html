@@ -10,8 +10,8 @@
 <style>
 :root{
   --bg:#F3F5F8;--panel:#FFFFFF;--ink:#16202C;--muted:#5E6B7B;--faint:#8A96A6;--line:#E1E6ED;--soft-line:#EEF1F5;
-  --accent:#0E7C7B;--accent-ink:#FFFFFF;--soft:#E3F2F1;
-  --good:#1E8E4E;--good-soft:#E4F4EA;--warn:#B7791F;--warn-soft:#FBF1DE;--bad:#C2412D;--bad-soft:#FBE7E3;
+  --accent:#0B6766;--accent-ink:#FFFFFF;--soft:#E3F2F1;
+  --good:#16703C;--good-soft:#E4F4EA;--warn:#875A12;--warn-soft:#FBF1DE;--bad:#A3341F;--bad-soft:#FBE7E3;
   --c1:#0E7C7B;--c2:#4C6FBF;--c3:#E0A100;--c4:#C2412D;--c5:#8A96A6;--c6:#7B5EA7;
   --radius:12px;--shadow:0 1px 2px rgba(22,32,44,.04),0 1px 1px rgba(22,32,44,.03);
 }
@@ -35,10 +35,33 @@ a{color:var(--accent)}
 .site-pick label{margin:0;font-weight:500;color:var(--muted);font-size:13px}
 .top select{width:auto;min-width:220px;max-width:340px;padding:7px 10px}
 .layout{display:grid;grid-template-columns:232px 1fr;min-height:calc(100vh - 57px)}
-nav{padding:18px 12px;border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;gap:2px;position:sticky;top:57px;height:calc(100vh - 57px);overflow:auto}
+nav{padding:10px 12px;border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;gap:2px;position:sticky;top:57px;height:calc(100vh - 57px);overflow:auto}
 .nav-group{font-size:12px;color:var(--faint);font-weight:600;padding:14px 12px 4px}
 .nav-group:first-child{padding-top:0}
-nav button{all:unset;cursor:pointer;display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;color:var(--ink);font-size:14.5px}
+nav button{all:unset;cursor:pointer;display:flex;align-items:center;gap:10px;padding:6px 12px;border-radius:8px;color:var(--ink);font-size:14px;line-height:1.35}
+nav .nav-group{all:unset;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-size:11.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);padding:10px 12px 4px}
+nav .nav-group:focus-visible,nav button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+nav .nav-group::after{content:"▾";font-size:11px;transition:transform .15s}nav .nav-group[aria-expanded=false]::after{transform:rotate(-90deg)}
+nav button.folded{display:none}
+nav .nav-more::after{content:"▸";margin-left:auto;font-size:11px;color:var(--muted);transition:transform .15s}nav .nav-more[aria-expanded=true]::after{transform:rotate(90deg)}
+nav button.nav-sub{padding-left:38px;font-size:13.5px}nav button.nav-sub.more-closed{display:none}
+.crumb{display:inline-block;margin-bottom:6px;font-size:13.5px}
+nav .nav-search{all:unset;cursor:pointer;display:flex;align-items:center;gap:8px;margin:4px 0 6px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;color:var(--muted);font-size:13.5px;background:var(--panel)}
+nav .nav-search:hover{border-color:var(--accent)}nav .nav-search:focus-visible{outline:2px solid var(--accent);outline-offset:2px}nav .nav-search span{flex:1}
+kbd{font:11.5px/1 ui-monospace,monospace;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:2px 5px;color:var(--muted);background:var(--bg)}
+.cmd-back{position:fixed;inset:0;z-index:40;background:rgba(15,23,42,.35);display:flex;justify-content:center;align-items:flex-start;padding-top:12vh}
+.cmd{width:min(640px,92vw);background:var(--panel);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,.25);overflow:hidden}
+.cmd input{width:100%;box-sizing:border-box;border:0;border-bottom:1px solid var(--line);padding:16px 18px;font-size:16px;outline:none;background:var(--panel);color:var(--ink)}
+.cmd ul{list-style:none;margin:0;padding:6px;max-height:min(420px,55vh);overflow:auto}
+.cmd li{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:9px 12px;border-radius:8px;cursor:pointer}
+.cmd li[aria-selected=true]{background:var(--soft)}.cmd li .where{color:var(--muted);font-size:12.5px;white-space:nowrap}.cmd li .kind{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-right:6px}
+.cmd .cmd-hint{margin:0;padding:8px 14px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}.cmd .cmd-empty{padding:14px;color:var(--muted)}
+#ta-main{margin-bottom:0}#ta-main button{font-weight:600}.tabs2.sub{margin-top:6px;padding:4px;background:var(--bg);border-radius:8px;border-bottom:0}.tabs2.sub button{font-size:13.5px}
+.tcount{font-weight:400;font-size:12.5px;margin-left:2px}
+.srcline{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:13.5px;color:var(--muted);margin:-4px 0 12px}
+.srcline button{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--ink)}
+.srcline button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.srcline .dot{width:8px;height:8px;border-radius:50%;background:var(--line)}.srcline .dot.on{background:var(--good)}
+#gs-tabs{margin-bottom:12px}
 nav button svg{width:17px;height:17px;flex:none;stroke:var(--muted);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 nav button:hover{background:var(--bg)}
 nav button[aria-current=true]{background:var(--soft);color:var(--accent);font-weight:600}
@@ -102,7 +125,7 @@ input:focus,textarea:focus,select:focus{outline:2px solid var(--soft);border-col
 .delta{font-size:12.5px;font-weight:600}.delta.up{color:var(--good)}.delta.down{color:var(--bad)}
 
 /* tables */
-.tw{overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin:8px 0}
+.tw{overflow-x:auto;position:relative;border:1px solid var(--line);border-radius:10px;margin:8px 0}
 table{border-collapse:collapse;width:100%;font-size:14px}
 th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--soft-line);vertical-align:top}
 th{background:var(--bg);color:var(--muted);font-size:12.5px;font-weight:600;white-space:nowrap}
@@ -188,6 +211,62 @@ details.iss[open] summary{margin-bottom:8px}
 .steps li.done .t{color:var(--muted);text-decoration:line-through}
 .steps .t{flex:1}
 .welcome{padding:34px;text-align:left}
+.cal-board{display:grid;grid-template-columns:repeat(6,minmax(180px,1fr));gap:10px;overflow-x:auto;padding-bottom:6px}
+.cal-col{background:var(--bg);border-radius:10px;padding:8px;min-height:160px}.cal-col.drop{outline:2px dashed var(--accent)}
+.cal-col h3{font-size:13px;margin:2px 4px 8px;display:flex;justify-content:space-between}
+.cal-card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px;font-size:13.5px;cursor:grab}
+.cal-card[draggable=false]{cursor:default}.cal-card .meta{color:var(--muted);font-size:12px;margin-top:4px}
+.cal-month{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}.cal-day{border:1px solid var(--line);border-radius:6px;min-height:84px;padding:4px;font-size:12px}
+.cal-day .d{color:var(--muted)}.cal-day.today{border-color:var(--accent)}.cal-chip{display:block;background:var(--soft);border-radius:4px;padding:2px 4px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.skip-link{position:absolute;left:12px;top:-60px;z-index:100;background:var(--accent);color:var(--accent-ink);padding:10px 14px;border-radius:8px;font-weight:600;text-decoration:none}
+.skip-link:focus{top:10px}
+main:focus{outline:none}
+.sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.chat-wrap{display:grid;grid-template-columns:240px 1fr;gap:14px;align-items:start}
+.chat-list .conv{all:unset;box-sizing:border-box;display:block;width:100%;cursor:pointer;padding:8px 10px;border-radius:8px;font-size:14px;margin:2px 0}
+.chat-list .conv[aria-current=true],.chat-list .conv:hover{background:var(--soft)}.chat-list .conv:focus-visible{outline:2px solid var(--accent)}
+#chat-msgs{min-height:320px;max-height:62vh;overflow:auto;padding:4px 2px}
+.msg{margin:0 0 14px}.msg.user .bubble{background:var(--soft);border-radius:12px;padding:10px 14px;display:inline-block;max-width:85%;white-space:pre-wrap}
+.msg.user{text-align:right}.msg.ai .bubble{max-width:100%}.msg.ai .bubble p:first-child{margin-top:0}
+.msg .src{font-size:12.5px;color:var(--muted);margin-top:6px}.msg .acts{margin-top:6px}
+.chat-input{display:flex;gap:8px;margin-top:10px}.chat-input textarea{flex:1;min-height:52px;resize:vertical}
+@media(max-width:800px){.chat-wrap{grid-template-columns:1fr}}
+#wizard{position:fixed;inset:0;z-index:45;background:color-mix(in srgb,var(--bg) 92%,transparent);display:flex;align-items:flex-start;justify-content:center;padding:5vh 16px;overflow:auto}
+#wizard .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:26px 28px;width:min(680px,100%);box-shadow:0 14px 40px rgba(0,0,0,.12)}
+.wz-steps{display:flex;gap:4px;margin:0 0 18px;padding:0;list-style:none}
+.wz-steps li{flex:1;height:5px;border-radius:99px;background:var(--line)}
+.wz-steps li.done{background:var(--good)}.wz-steps li.now{background:var(--accent)}
+.wz-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:20px;flex-wrap:wrap}
+.wz-opt{all:unset;box-sizing:border-box;cursor:pointer;display:block;width:100%;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;margin:6px 0}
+.wz-opt:hover,.wz-opt[aria-pressed=true]{border-color:var(--accent)}.wz-opt[aria-pressed=true]{background:var(--soft)}
+.wz-opt:focus-visible{outline:2px solid var(--accent)}
+#gate{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;align-items:flex-start;justify-content:center;padding:8vh 16px;overflow:auto}
+#gate .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:28px;width:min(440px,100%);box-shadow:0 10px 30px rgba(0,0,0,.08)}
+#gate h1{font-size:24px;margin:0 0 6px}
+#ro-banner{background:var(--warn-soft);border-bottom:1px solid var(--warn);padding:8px 18px;font-size:14px;text-align:center}
+body.readonly nav button[data-v=generate],body.readonly nav button[data-v=audit]{display:none}
+body.role-client #ai-pill,body.role-client .settings-ai{display:none}
+.member-row{display:grid;grid-template-columns:1fr 170px auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--soft-line)}
+@media(max-width:700px){.member-row{grid-template-columns:1fr}}
+/* phones: the header wraps instead of running off the screen, long buttons wrap, wide things stay inside the screen */
+@media(max-width:700px){
+  .top{flex-wrap:wrap;gap:8px 10px;padding:10px 14px}
+  .top > *{min-width:0;max-width:100%}
+  .top select{max-width:100%;min-width:0;flex:1 1 160px}
+  .top .btn{white-space:nowrap}
+  .btn{white-space:normal;max-width:100%;text-align:center}
+  main input,main select,main textarea{max-width:100%;min-width:0}
+  .row{min-width:0}.row > *{min-width:0}
+  main img,main svg,main video{max-width:100%;height:auto}
+  .chat-input{flex-direction:column}.chat-input .btn{width:100%}
+  #wizard .card,#gate .card{padding:20px 16px}
+}
+.err-pill{border-color:var(--bad)!important;color:var(--bad)!important}
+.ai-bar{position:fixed;right:18px;bottom:18px;z-index:20;display:flex;gap:10px;align-items:center;background:var(--ink);color:var(--panel);border-radius:99px;padding:8px 10px 8px 16px;box-shadow:0 6px 20px rgba(0,0,0,.18);font-size:14px}
+.ai-bar .btn{padding:4px 12px;font-size:13px;background:var(--panel);color:var(--ink);border-color:var(--panel)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:21;max-width:min(640px,92vw);background:#1f2937;color:#fff;border-radius:10px;padding:10px 14px;box-shadow:0 6px 20px rgba(0,0,0,.2);font-size:14px;display:flex;gap:12px;align-items:flex-start}
+.toast button{all:unset;cursor:pointer;font-weight:700}
+.toast.toast-err{background:var(--bad)}
 mark.hl-filler{background:var(--warn-soft);border-bottom:2px solid var(--warn)}mark.hl-unsourced{background:var(--bad-soft);border-bottom:2px solid var(--bad)}
 mark.hl-repetition{background:color-mix(in srgb,var(--c6) 18%,transparent);border-bottom:2px solid var(--c6)}mark.hl-long{background:color-mix(in srgb,var(--c2) 15%,transparent);border-bottom:2px solid var(--c2)}
 .hl-legend{display:flex;gap:10px;flex-wrap:wrap;font-size:13px;margin-bottom:10px}
@@ -290,36 +369,46 @@ a.trunc:hover{text-decoration:underline}
 </style>
 </head>
 <body>
+<a href="#main" class="skip-link">Skip to content</a>
+<div id="ro-banner" class="hidden" role="status"></div>
 <header class="top">
   <h1><span class="logo" aria-hidden="true">C</span>Content Engine</h1>
-  <div class="site-pick"><label for="site-select">Website</label><select id="site-select"><option value="">No website yet</option></select><span class="status" id="site-state"></span><button class="btn ghost small" id="ai-pill" data-go-settings>AI: not connected</button></div>
+  <div class="site-pick"><label for="site-select">Website</label><select id="site-select"><option value="">No website yet</option></select><span class="status" id="site-state"></span><select id="ws-select" class="hidden" aria-label="Workspace" style="width:auto;max-width:200px"></select><button class="btn ghost small hidden" id="user-btn" data-go-settings></button><button class="btn ghost small hidden" id="sync-pill" data-go-settings title="Team sync">☁ Team</button><button class="btn ghost small" id="ai-pill" data-go-settings>AI: not connected</button></div>
 </header>
 <div class="layout">
 <nav aria-label="Sections">
-  <div class="nav-group">Overview</div>
+  <button type="button" class="nav-search" id="cmd-open" aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span>Search…</span><kbd id="cmd-kbd">Ctrl K</kbd></button>
+  <button type="button" class="nav-group" aria-expanded="true" data-group="overview">Overview</button>
   <button data-v="home" aria-current="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>Home</button>
+  <button data-v="chat" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 01-11.8 7L4 20l1.1-4.4A8 8 0 1121 12z"/></svg>Ask AI</button>
   <button data-v="actions" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>To-do list<span class="badge hidden" id="nav-badge"></span></button>
-  <div class="nav-group">Plan</div>
+  <button type="button" class="nav-group" aria-expanded="true" data-group="plan">Plan</button>
   <button data-v="strategy" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>Content ideas</button>
-  <button data-v="keyword" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>Check a keyword</button>
+  <button data-v="calendar" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Calendar</button>
   <button data-v="urlmap" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/></svg>Keywords</button>
-  <div class="nav-group">Create</div>
+  <button type="button" class="nav-group" aria-expanded="true" data-group="create">Create</button>
   <button data-v="generate" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/></svg>Write a page</button>
-  <button data-v="audit" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12l2 2 4-4"/><rect x="4" y="3" width="16" height="18" rx="2"/></svg>Review a draft</button>
   <button data-v="library" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6v14H4zM14 5h6v14h-6z"/></svg>My pages</button>
-  <div class="nav-group">Measure</div>
+  <button type="button" class="nav-group" aria-expanded="true" data-group="measure">Measure</button>
   <button data-v="tech" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Site health</button>
-  <button data-v="gsc" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Google search</button>
+  <button data-v="gsc" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Performance</button>
   <button data-v="aivis" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.5 5.5L20 11l-5.5 2.5L12 19l-2.5-5.5L4 11l5.5-2.5z"/></svg>AI answers</button>
-  <div class="nav-group">Setup</div>
-  <button data-v="settings" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>AI &amp; data</button>
+  <button data-v="reports" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"/><path d="M14 3v6h6M8 17v-3M12 17v-6M16 17v-4"/></svg>Reports</button>
+  <button data-v="competitors" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M14.5 15.2c.8-.5 1.7-.7 2.5-.7 2.5 0 4.5 2 4.5 4.5"/></svg>Competitors</button>
+  <button type="button" class="nav-more" id="nav-more" aria-expanded="false" aria-controls="nav-more-items"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>More tools</button>
+  <button class="nav-sub" data-v="history" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 109-9 9.7 9.7 0 00-6.7 2.7L3 8"/><path d="M3 3v5h5M12 7v5l4 2"/></svg>Page history</button>
+  <button class="nav-sub" data-v="migration" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h11l-3-3M20 17H9l3 3"/></svg>Site migration</button>
+  <button type="button" class="nav-group" aria-expanded="true" data-group="setup">Setup</button>
+  <button data-v="settings" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg>Settings</button>
   <button data-v="site" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>Websites</button>
+  <button data-v="kb" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 016.5 17H20V3H6.5A2.5 2.5 0 004 5.5v14z"/><path d="M8 7h8M8 11h6"/></svg>Knowledge base</button>
   <button data-v="rules" aria-current="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h7"/></svg>Rules</button>
 </nav>
-<main>
+<main id="main" tabindex="-1">
 
 <section data-view="home">
   <div class="page-head"><h2>Home</h2><p>Your site at a glance, and what to do next.</p></div>
+  <div id="home-monitor"></div>
   <div id="home-out"><div class="panel"><p class="status spin">Loading…</p></div></div>
 </section>
 
@@ -330,7 +419,8 @@ a.trunc:hover{text-decoration:underline}
       <div class="field"><label for="s-url">Website URL</label><input id="s-url" placeholder="https://example.com"></div>
       <div class="field"><label for="s-name">Brand name</label><input id="s-name" placeholder="Example"></div>
     </div>
-    <div class="field"><label for="s-product">What the product does</label><textarea id="s-product" placeholder="One or two sentences, plus what makes it different."></textarea></div>
+    <div class="field"><label for="s-type">Type of website <span>(steers how pages are written; detected automatically if you leave it)</span></label><select id="s-type"><option value="">Detect automatically</option></select></div>
+    <div class="field"><label for="s-product">What the business offers</label><textarea id="s-product" placeholder="Products or services in one or two sentences, plus what makes them different."></textarea></div>
     <div class="grid2">
       <div class="field"><label for="s-aud">Audience</label><input id="s-aud" placeholder="Roles, company size, industries"></div>
       <div class="field"><label for="s-max">Pages to read</label><input id="s-max" type="number" value="200" min="10" max="1000"></div>
@@ -368,9 +458,16 @@ a.trunc:hover{text-decoration:underline}
 </section>
 
 <section data-view="gsc" class="hidden">
-  <div class="page-head"><h2>Google search performance</h2><p>Upload your Search Console export to see which searches and pages need attention.</p></div>
-  <div id="gsc-out"></div>
-  <div class="panel">
+  <div class="page-head"><h2>Performance</h2><p>Your traffic in one place: Google searches and pages, daily rankings, declining pages, conversions from Google Analytics, and Bing.</p></div>
+  <div class="srcline" id="gs-sources" role="status"></div>
+  <div class="tabs2" role="group" aria-label="Performance sections" id="gs-tabs"><button data-gs="overview">Overview</button><button data-gs="searches">Searches &amp; pages</button><button data-gs="rankings">Rankings</button><button data-gs="decay">Content decay</button><button data-gs="analytics">Analytics</button><button data-gs="bing">Bing</button><button data-gs="import">Import &amp; connect</button></div>
+  <div id="gsc-out" data-gsp="overview searches"></div>
+  <div class="panel" data-gsp="rankings"><div id="rk-out"><p class="status">Loading…</p></div></div>
+  <div class="panel" id="decay-panel" data-gsp="decay"></div>
+  <div class="panel" id="ga4-panel" data-gsp="analytics"></div>
+  <div class="panel" id="bing-panel" data-gsp="bing"></div>
+  <div class="panel" id="gsc-conn" data-gsp="import"></div>
+  <div class="panel" data-gsp="import">
     <h2>Upload Search Console data</h2>
     <details id="gsc-how" open style="margin:8px 0 16px"><summary class="status">How to export from Search Console</summary>
     <ol class="steps" style="margin-top:10px">
@@ -387,6 +484,7 @@ a.trunc:hover{text-decoration:underline}
 
 <section data-view="aivis" class="hidden">
   <div class="page-head"><h2>AI answers</h2><p>Track whether ChatGPT, Gemini, Claude and other assistants recommend you when people ask questions in your field, and what to do when they don't.</p></div>
+  <div class="panel" id="air-panel"></div>
   <div class="panel" id="av-runbox">
     <h2>Questions you track</h2>
     <p class="lead">Questions your buyers would ask an AI assistant. Don't include your brand name: the point is to see whether AI recommends you without being asked.</p>
@@ -427,6 +525,7 @@ a.trunc:hover{text-decoration:underline}
 </section>
 
 <section data-view="keyword" class="hidden">
+  <button class="linkbtn crumb" data-goto="urlmap">‹ Keywords</button>
   <div class="page-head"><h2>Check a keyword</h2><p>Before anyone writes: what the searcher wants, what Google currently ranks, and whether you already have a page for it.</p></div>
   <div class="panel">
     <div class="row" style="flex-wrap:nowrap"><input id="k-kw" placeholder="e.g. how to create a product demo video" style="flex:1;min-width:0"><button class="btn" id="k-run">Check</button></div>
@@ -440,7 +539,7 @@ a.trunc:hover{text-decoration:underline}
 </section>
 
 <section data-view="generate" class="hidden">
-  <div class="page-head"><h2>Write a page</h2><p>Writes a full page that follows Google's rules, then checks, fixes and fact-checks it. You edit, fill in real proof and approve it before publishing.</p></div>
+  <div class="page-head"><h2>Write a page</h2><p>Writes a full page that follows Google's rules, then checks, fixes and fact-checks it. You edit, fill in real proof and approve it before publishing. <button class="linkbtn" id="go-audit2">Already have a draft? Review it instead</button></p></div>
   <div class="panel">
     <div class="grid2">
       <div class="field"><label for="g-kw">Main keyword</label><input id="g-kw" autocomplete="off"><div id="g-kwinfo" class="kwinfo" aria-live="polite"></div></div>
@@ -448,9 +547,10 @@ a.trunc:hover{text-decoration:underline}
     </div>
     <div class="grid3">
       <div class="field"><label for="g-intent">What the searcher wants</label><select id="g-intent"></select></div>
-      <div class="field"><label for="g-type">Page type</label><select id="g-type"></select></div>
+      <div class="field"><label for="g-type">Page type</label><select id="g-type"></select><p class="status hidden" id="g-type-hint" style="margin:6px 0 0"></p></div>
       <div class="field"><label for="g-aud">Reader</label><input id="g-aud" placeholder="Who is this for?"></div>
     </div>
+    <div class="row" id="g-qbank-row" style="margin:0 0 4px"><button class="btn ghost small hidden" id="g-qbank" type="button">Add saved questions as FAQ ideas</button></div>
     <div class="field"><label for="g-notes">Your proof and notes <span>(data, customer examples, opinions, product details)</span></label><textarea id="g-notes" placeholder="The more first-hand material you add, the better the page. Anything missing becomes a placeholder for you to fill."></textarea></div>
     <details class="style-box" id="g-style"><summary><b>Writing style for this website</b> <span class="status" id="g-style-sum"></span></summary>
       <div class="grid2" style="margin:12px 0 0">
@@ -460,21 +560,25 @@ a.trunc:hover{text-decoration:underline}
         <div class="field"><label for="st-spell">Spelling</label><select id="st-spell"><option value="">Not set</option><option>American English</option><option>British English</option><option>Indian English</option></select></div>
         <div class="field"><label for="st-avoid">Words or phrases to never use</label><input id="st-avoid" placeholder="e.g. revolutionary, seamless, best-in-class"></div>
         <div class="field"><label for="st-cta">Preferred call to action</label><input id="st-cta" placeholder="e.g. Start a free trial"></div>
+        <div class="field"><label for="st-mode">How to write pages</label><select id="st-mode"><option value="">Automatic (section by section for free models)</option><option value="sections">Section by section (best for long guides)</option><option value="whole">All at once (fastest with paid models)</option></select></div>
+        <div class="field"><label for="st-language">Language <span>(leave empty to use your site's main language)</span></label><input id="st-language" placeholder="e.g. English, Hindi, Spanish"></div>
       </div>
       <div class="field"><label for="st-notes">Other house rules <span>(optional)</span></label><input id="st-notes" placeholder="e.g. Always call our product 'the editor', never 'the tool'"></div>
-      <div class="row"><button class="btn ghost small" id="st-save" type="button">Save style</button><span class="status" id="st-status"></span></div>
+      <div class="row"><button class="btn ghost small" id="st-save" type="button">Save style</button><span class="status" id="sty-status" role="status"></span></div>
     </details>
     <div class="row" style="margin-top:14px"><label class="check"><input type="checkbox" id="g-verify" checked> Fact-check claims with web search</label>
       <label class="check"><input type="checkbox" id="g-override"> Write even if a page for this already exists (not recommended)</label></div>
     <div class="row" style="margin-top:14px"><button class="btn" id="g-run">Write the page</button><span class="status" id="g-status" role="status"></span></div>
+    <div id="g-resume" class="hidden" style="margin-top:10px"></div>
     <ol class="stepper hidden" id="g-steps" aria-label="Progress">
-      <li data-step="1">Understand the searcher</li><li data-step="2">Plan the page</li><li data-step="3">Write</li><li data-step="4">Check and fix</li><li data-step="5">Fact-check</li>
+      <li data-step="1">Understand and plan</li><li data-step="2">Write</li><li data-step="3">Check and fix</li><li data-step="4">Fact-check</li>
     </ol>
   </div>
   <div id="g-out"></div>
 </section>
 
 <section data-view="audit" class="hidden">
+  <button class="linkbtn crumb" data-goto="library">‹ My pages</button>
   <div class="page-head"><h2>Review a draft</h2><p>Check any page before it goes live: one from a writer or agency, a Google Doc, or a page already on your site. Same rules and scores as pages written here.</p></div>
   <div class="panel">
     <div class="tabs2" role="group" id="a-src" style="margin-top:0"><button data-as="paste" aria-pressed="true">Paste</button><button data-as="file" aria-pressed="false">Upload a file</button><button data-as="url" aria-pressed="false">From a URL</button></div>
@@ -495,12 +599,14 @@ a.trunc:hover{text-decoration:underline}
 </section>
 
 <section data-view="urlmap" class="hidden">
-  <div class="page-head"><h2>Keywords</h2><p>Every keyword you care about, whether you already have a page for it, and which page should own it.</p></div>
-  <div class="tabs2" role="tablist" id="kw-tabs">
-    <button role="tab" aria-pressed="true" data-kt="list">My keywords</button>
-    <button role="tab" aria-pressed="false" data-kt="ideas">Find ideas</button>
-    <button role="tab" aria-pressed="false" data-kt="clusters">Topic clusters</button>
-    <button role="tab" aria-pressed="false" data-kt="compete">Competing pages</button>
+  <div class="page-head"><div class="row" style="justify-content:space-between;align-items:flex-start"><div><h2>Keywords</h2><p>Every keyword you care about, whether you already have a page for it, and which page should own it. Daily positions are under <button class="linkbtn" id="go-ranks">Performance → Rankings</button>.</p></div><button class="btn" id="go-keyword">Check a keyword</button></div></div>
+  <div class="tabs2" role="group" aria-label="Keyword views" id="kw-tabs">
+    <button aria-pressed="true" data-kt="list">My keywords</button>
+    <button aria-pressed="false" data-kt="ideas">Find ideas</button>
+    <button aria-pressed="false" data-kt="clusters">Topic clusters</button>
+    <button aria-pressed="false" data-kt="compete">Competing pages</button>
+    <button aria-pressed="false" data-kt="questions">Real questions</button>
+    <button aria-pressed="false" data-kt="wiki">Topic facts</button>
   </div>
 
   <div data-kp="list">
@@ -517,10 +623,10 @@ a.trunc:hover{text-decoration:underline}
     <div class="panel">
       <div class="row" style="margin-bottom:12px">
         <input id="kw-q" placeholder="Search keywords" style="flex:1;min-width:180px">
-        <select id="kw-f-cov" style="width:auto"><option value="">All coverage</option><option value="gap">No page yet</option><option value="partial">Partly covered</option><option value="covered">Has a page</option></select>
-        <select id="kw-f-intent" style="width:auto"><option value="">All intents</option></select>
-        <select id="kw-f-action" style="width:auto"><option value="">All actions</option></select>
-        <select id="kw-sort" style="width:auto"><option value="opportunity">Sort: opportunity</option><option value="volume">Sort: volume</option><option value="keyword">Sort: A–Z</option><option value="recent">Sort: newest</option></select>
+        <select id="kw-f-cov" aria-label="Filter by page coverage" style="width:auto"><option value="">All coverage</option><option value="gap">No page yet</option><option value="partial">Partly covered</option><option value="covered">Has a page</option></select>
+        <select id="kw-f-intent" aria-label="Filter by search intent" style="width:auto"><option value="">All intents</option></select>
+        <select id="kw-f-action" aria-label="Filter by action" style="width:auto"><option value="">All actions</option></select>
+        <select id="kw-sort" aria-label="Sort keywords" style="width:auto"><option value="opportunity">Sort: opportunity</option><option value="volume">Sort: volume</option><option value="keyword">Sort: A–Z</option><option value="recent">Sort: newest</option></select>
       </div>
       <div class="row hidden" id="kw-bulk" style="background:var(--soft);padding:8px 12px;border-radius:10px;margin-bottom:10px">
         <b id="kw-bulk-n"></b>
@@ -547,10 +653,22 @@ a.trunc:hover{text-decoration:underline}
     <div class="panel">
       <h2>Topic clusters</h2>
       <p class="lead">Keywords that one page should target together. Write <b>one strong page per cluster</b>, not one page per keyword: lots of near-identical pages is exactly what Google's scaled-content policy penalises.</p>
-      <div id="kc-out"><p class="status spin">Grouping keywords…</p></div>
+      <div id="kc-out"><p class="status">Your keywords will be grouped into topics here.</p></div>
     </div>
   </div>
 
+  <div data-kp="questions" class="hidden"><div class="panel">
+    <p class="lead" style="margin-top:0">Real questions people ask on Stack Exchange's Q&amp;A sites (Stack Overflow, Super User, Web Applications and more), with how popular they are and whether your site answers them. Most useful for software, technical and how-to topics.</p>
+    <div class="row" style="flex-wrap:nowrap"><input id="qx-q" placeholder="Topic, e.g. screen recording" aria-label="Topic" style="flex:1"><button class="btn" id="qx-go">Find questions</button></div>
+    <div class="row" id="qx-sites" style="margin-top:8px"></div>
+    <span class="status" id="qx-status" role="status"></span></div>
+    <div id="qx-out"></div>
+    <div class="panel"><h2>Question bank <span class="status" style="font-weight:400">(saved for FAQs and new pages; shared with your team)</span></h2><div id="qx-bank"></div></div>
+  </div>
+  <div data-kp="wiki" class="hidden"><div class="panel">
+    <p class="lead" style="margin-top:0">The Wikipedia article for a topic (in your site's language): its subtopics, so you can spot gaps in your outline, and key facts from Wikidata with sources.</p>
+    <div class="row" style="flex-wrap:nowrap"><input id="wk-q" placeholder="Topic, e.g. standard operating procedure" aria-label="Topic" style="flex:1"><button class="btn" id="wk-go">Look up</button></div>
+    <span class="status" id="wk-status" role="status"></span></div><div id="wk-out"></div></div>
   <div data-kp="compete" class="hidden">
     <div class="panel">
       <h2>Pages competing with each other</h2>
@@ -562,42 +680,221 @@ a.trunc:hover{text-decoration:underline}
 </section>
 
 <section data-view="library" class="hidden">
-  <div class="page-head"><h2>My pages</h2><p>Every page written for this website.</p></div>
+  <div class="page-head"><div class="row" style="justify-content:space-between;align-items:flex-start"><div><h2>My pages</h2><p>Every page written for this website.</p></div><button class="btn ghost" id="go-audit">Review a draft</button></div></div>
   <div class="panel"><div id="lib-out"></div></div>
 </section>
 
 <section data-view="settings" class="hidden">
-  <div class="page-head"><h2>AI &amp; data</h2><p>Choose your AI provider and paste your API key. The key stays in this browser and is sent only to the provider you choose.</p></div>
-  <div class="panel">
-    <h2>1. Choose your AI provider</h2>
-    <div class="grid4" style="margin-top:12px" id="prov-cards"></div>
+  <div class="page-head"><h2>Settings</h2><p>Your AI provider, free Google and Bing keys, alerts, and your team and data.</p></div>
+  <div class="tabs2" role="group" aria-label="Settings sections" id="set-tabs"><button data-st="ai">AI <span class="tcount" data-stc="ai"></span></button><button data-st="google">Google &amp; Bing <span class="tcount" data-stc="google"></span></button><button data-st="alerts">Alerts <span class="tcount" data-stc="alerts"></span></button><button data-st="team">Team &amp; data <span class="tcount" data-stc="team"></span></button></div>
+  <div data-stp="ai" class="panel">
+    <h2>Choose your AI provider</h2>
+    <div class="grid3" style="margin-top:12px" id="prov-cards"></div>
     <div id="prov-form">
       <div class="grid2" style="margin-bottom:0">
-        <div class="field"><label for="set-key">API key <span id="set-keyhelp"></span></label>
+        <div class="field" id="key-field"><label for="set-key"><span id="set-keylabel">API key</span> <span id="set-keyhelp"></span></label>
           <div class="row" style="flex-wrap:nowrap"><input id="set-key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your API key"><button class="btn ghost small" id="set-show" type="button">Show</button></div></div>
-        <div class="field"><label for="set-model">Model <span>(click "Load models" to see what your key can use)</span></label>
+        <div class="field"><label for="set-model">Model <span id="model-hint">(click "Load models" to see what your key can use)</span></label>
           <div class="row" style="flex-wrap:nowrap"><select id="set-model"></select><button class="btn ghost small" id="set-load" type="button">Load models</button></div></div>
       </div>
+      <div id="local-box" class="hidden" style="margin-bottom:14px">
+        <div class="field"><label for="local-model">Model to run in your browser</label><select id="local-model"></select></div>
+        <div id="local-check" class="status" style="margin-bottom:10px"></div>
+        <div class="row"><button class="btn ghost" id="local-load" type="button">Download and start this model</button><span class="status" id="local-status" role="status"></span></div>
+        <div class="bar hidden" id="local-bar" style="height:8px;margin-top:10px"><i style="width:0%"></i></div>
+        <p class="status" style="margin:12px 0 0">Free and private: the model runs on your computer's graphics chip and nothing you write leaves this browser. The first download takes a few minutes and is kept for next time. Writing is slower than ChatGPT or Claude and the quality is simpler, so review drafts carefully. It can't search the web, so fact-checking and AI-answer checks need an API provider.</p>
+      </div>
+      <div id="ollama-box" class="hidden" style="margin-bottom:14px">
+        <details open><summary><b>Set up Ollama (one time, about 10 minutes)</b></summary>
+          <ol class="steps" style="margin-top:10px">
+            <li><span class="n">1</span><span class="t">Download and install the free app from <b>ollama.com</b>.</span></li>
+            <li><span class="n">2</span><span class="t">Open Terminal and download a model: <code>ollama pull qwen3:8b</code> (about 5 GB; good for 16 GB Macs). For more powerful computers: <code>ollama pull qwen3:14b</code>.</span></li>
+            <li><span class="n">3</span><span class="t">Allow this website to use it. On a Mac run <code id="ollama-origin-cmd"></code> then quit and reopen the Ollama app.</span></li>
+            <li><span class="n">4</span><span class="t">Click <b>Load models</b> above, choose your model, then <b>Save</b> and <b>Test connection</b>. Chrome may ask to allow access to apps on your computer: choose Allow.</span></li>
+          </ol></details>
+        <p class="status" style="margin:10px 0 0">Free and private, and usually better than the built-in AI because it can run bigger models. It can't search the web, so fact-checking and AI-answer checks need an API provider.</p>
+      </div>
       <div class="row" style="gap:18px;margin-bottom:12px">
-        <label class="check"><input type="checkbox" id="set-web" checked> Use web search for fact-checking and AI-answer checks</label>
-        <label class="check"><input type="checkbox" id="set-remember" checked> Remember my key on this device</label>
+        <label class="check" id="web-row"><input type="checkbox" id="set-web" checked> Use web search for fact-checking and AI-answer checks</label>
+        <label class="check" id="remember-row"><input type="checkbox" id="set-remember" checked> Remember my key on this device</label>
       </div>
       <div class="row"><button class="btn" id="set-save">Save</button><button class="btn ghost" id="set-test">Test connection</button><span class="status" id="set-status" role="status"></span></div>
-      <p class="status" style="margin-top:12px">Your key is stored only in this browser and sent directly to the provider. Don't save keys on shared computers: untick "Remember" and the key is forgotten when you close the tab. Usage is billed to your own account.</p>
+      <p class="status" id="key-note" style="margin-top:12px">Your key is stored only in this browser and sent directly to the provider. Don't save keys on shared computers: untick "Remember" and the key is forgotten when you close the tab. Usage is billed to your own account.</p>
     </div>
   </div>
-  <div class="panel">
-    <h2>2. Your data</h2>
+  <div data-stp="alerts" class="panel" id="mon-panel">
+    <h2>Weekly monitoring <span class="pill">optional</span></h2>
+    <p class="lead">Once a week, even with no browser open: checks your key pages (errors, noindex, title changes, redirects), compares Google clicks with the week before, notes new Google updates, and lists pages waiting for approval and overdue to-dos. Then it emails a short summary.</p>
+    <div id="mon-req" class="status" style="margin-bottom:10px"></div>
+    <div class="grid2" style="margin-bottom:0"><div class="field"><label for="mon-to">Send the summary to <span>(emails, separated by commas)</span></label><input id="mon-to" placeholder="you@company.com, boss@company.com"></div>
+      <div class="field"><label for="mon-day">Day</label><select id="mon-day"><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="0">Sunday</option></select></div></div>
+    <div class="field"><label>Websites to check</label><div id="mon-sites" class="row"></div></div>
+    <label class="check"><input type="checkbox" id="mon-quiet"> Only email when something needs attention</label>
+    <p class="status" style="margin:0">Leave all websites unticked to check every website. If a week is missed, the check runs at the next opportunity.</p>
+    <div class="row" style="margin-top:10px"><label class="check" style="margin:0"><input type="checkbox" id="mon-on"> Turn on weekly monitoring</label><button class="btn" id="mon-save">Save</button>
+      <button class="btn ghost" id="mon-run">Run a check now</button><label class="check" style="margin:0"><input type="checkbox" id="mon-mail"> and send the email</label><span class="status" id="mon-status" role="status"></span></div>
+    <p class="status" id="mon-note" style="margin:10px 0 0"></p>
+    <div id="mon-results" style="margin-top:12px"></div>
+    <h3 style="font-size:15px;margin:18px 0 4px">Chat alerts <span class="pill">Slack, Teams, Google Chat</span></h3>
+    <p class="status" style="margin-top:0">Send the weekly summary, urgent problems, reviews, sign-offs and @mentions to your team's chat.</p>
+    <div id="chat-alerts"></div>
+  </div>
+  <div data-stp="ai" class="panel settings-ai" id="hybrid-panel">
+    <h2>Hybrid mode: free writing, paid review <span class="pill">optional</span></h2>
+    <p class="lead">Your free AI (Built-in AI or Ollama) writes the page; a paid model plans it, reviews quality, fixes the flagged sections and fact-checks with its own web search. Paid models charge most for writing, so this typically saves 30–60% compared with writing everything with the paid model: less when many review rounds are needed, more for long pages. Each page's report shows its estimated saving. Choosing a smaller paid model for review (for example Claude Haiku or a GPT mini model) saves more.</p>
+    <div class="grid2" style="margin-bottom:0">
+      <div class="field"><label for="hy-rev">Paid model for planning and review</label><select id="hy-rev"></select></div>
+      <div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" id="hy-plan" checked> Also plan pages with the paid model (recommended: a good plan shapes the whole page)</label></div>
+    </div>
+    <div class="row"><label class="check"><input type="checkbox" id="hy-on"> Use hybrid mode</label><button class="btn" id="hy-save">Save</button><span class="status" id="hy-status" role="status"></span></div>
+  </div>
+  <div data-stp="google" class="panel" id="google-tools-panel">
+    <h2>Free search engine tools <span class="pill">optional</span></h2>
+    <p class="lead">A free Google API key unlocks page speed tests (Site health → Speed) with Google's full free allowance of about 25,000 tests a day. A free Bing key adds Bing data (Google search screen).</p>
+    <details><summary class="status">How to get the key (5 minutes, free, no billing)</summary><ol class="steps" style="margin-top:8px">
+      <li><span class="n">1</span><span class="t">Go to <b>console.cloud.google.com</b> and choose or create a project (the same one as for Search Console is fine).</span></li>
+      <li><span class="n">2</span><span class="t"><b>APIs &amp; Services → Library</b>: enable <b>PageSpeed Insights API</b> and <b>Chrome UX Report API</b> (the second powers the quick real-visitor check).</span></li>
+      <li><span class="n">3</span><span class="t"><b>APIs &amp; Services → Credentials → Create credentials → API key</b>. Then <b>Edit</b> the key: under API restrictions choose only PageSpeed Insights API and Chrome UX Report API, and under Application restrictions choose Websites and add your site's address.</span></li>
+      <li><span class="n">4</span><span class="t">Paste the key below and click Save.</span></li></ol></details>
+    <div class="row" style="margin-top:10px;flex-wrap:nowrap"><input id="gk-key" type="password" autocomplete="off" placeholder="Google API key (AIza…)" aria-label="Google API key"><button class="btn" id="gk-save">Save</button></div>
+    <span class="status" id="gk-status" role="status"></span>
+    <h3 style="font-size:15px;margin:16px 0 4px">Bing Webmaster Tools</h3>
+    <p class="status" style="margin-top:0">In <b>Bing Webmaster Tools</b> (free; add your site there, or import it from Google Search Console in one click), open <b>Settings → API access → API key</b>, generate a key and paste it here. It stays in this browser.</p>
+    <div class="row" style="flex-wrap:nowrap"><input id="bk-key" type="password" autocomplete="off" placeholder="Bing API key (32 letters and numbers)" aria-label="Bing API key"><button class="btn" id="bk-save">Save</button></div>
+    <span class="status" id="bk-status" role="status"></span>
+  </div>
+  <div data-stp="ai" class="panel settings-ai" id="search-panel">
+    <h2>Web search for the free AI options <span class="pill">optional</span></h2>
+    <p class="lead">Built-in AI and Ollama can't search the web by themselves. Add a free search key and the tool searches for them, so they can research what ranks and fact-check pages.</p>
+    <div class="grid2" style="margin-bottom:0">
+      <div class="field"><label for="srch-prov">Search service</label><select id="srch-prov"><option value="tavily">Tavily (recommended: 1,000 free searches a month, no card)</option><option value="brave">Brave Search (about 1,000 a month in free credit, card required)</option></select></div>
+      <div class="field"><label for="srch-key">Search key <span id="srch-help"></span></label><div class="row" style="flex-wrap:nowrap"><input id="srch-key" type="password" autocomplete="off" placeholder="Paste your search key"></div></div>
+    </div>
+    <label class="check"><input type="checkbox" id="srch-team"> No key of my own: use the team's search key (your admin sets TAVILY_API_KEY in Netlify; needs team sync or the crawl token)</label>
+    <div class="row" style="margin-top:12px"><button class="btn" id="srch-save">Save</button><button class="btn ghost" id="srch-test">Test search</button><span class="status" id="srch-status" role="status"></span></div>
+    <p class="status" style="margin:10px 0 0">Results are cached for a day so repeated checks don't use up searches. A page fact-check uses about 6 searches; a keyword check uses 1.</p>
+  </div>
+  <div data-stp="ai" class="panel">
+    <h2>AI usage this month</h2>
+    <p class="lead">Counted in this browser for requests made by this tool. Your provider's dashboard has the exact bill.</p>
+    <div id="usage-out"></div>
+  </div>
+  <div data-stp="team" class="panel">
+    <h2>Your data</h2>
     <p class="lead">Websites, keywords, pages and reports are saved in this browser only. Back them up to move to another computer or share with a colleague.</p>
     <div class="row"><button class="btn ghost" id="data-export">Download backup</button>
       <label class="btn ghost" for="data-import" style="cursor:pointer">Restore from backup</label><input type="file" id="data-import" accept=".json" class="hidden">
       <button class="btn ghost" id="data-clear">Delete all data</button><span class="status" id="data-status" role="status"></span></div>
+    <p class="status" id="storage-out" style="margin:10px 0 0"></p>
   </div>
-  <div class="panel">
-    <h2>3. Crawl token <span class="pill">optional</span></h2>
+  <div data-stp="team" class="panel" id="team-panel">
+    <h2>Team workspace <span class="pill">optional</span></h2>
+    <p class="lead">Share websites, keywords, pages, plans and to-dos with your team, and keep a cloud backup. Everyone who enters the team password sees the same data. API keys are never shared.</p>
+    <div id="team-status" class="status" style="margin-bottom:12px"></div>
+    <div class="grid2" style="margin-bottom:0">
+      <div class="field"><label for="team-key">Team password</label><input id="team-key" type="password" autocomplete="off" placeholder="The TEAM_PASSWORD set in Netlify"></div>
+      <div class="field"><label for="team-name">Your name <span>(shown to teammates)</span></label><input id="team-name" placeholder="e.g. Kalpna"></div>
+    </div>
+    <div class="row"><button class="btn" id="team-on">Turn on team sync</button><button class="btn ghost" id="team-now">Sync now</button><button class="btn ghost" id="team-off">Turn off</button><span class="status" id="team-msg" role="status"></span></div>
+    <details style="margin-top:12px"><summary class="status">How to set it up (one time, for whoever manages the Netlify site)</summary>
+      <ol class="steps" style="margin-top:8px"><li><span class="n">1</span><span class="t">In Netlify, open your site → <b>Site configuration → Environment variables → Add a variable</b>. Name: <code>TEAM_PASSWORD</code>, value: a long password.</span></li>
+      <li><span class="n">2</span><span class="t">Go to <b>Deploys → Trigger deploy</b> so the change takes effect.</span></li>
+      <li><span class="n">3</span><span class="t">Share the password with your team. Each person enters it here and clicks <b>Turn on team sync</b>.</span></li></ol>
+      <p class="status">Data is stored in Netlify Blobs, part of your Netlify site. Changes sync every 2 minutes and a few seconds after you edit. When two people change the same list (for example keywords), both sets of changes are kept; when two people edit the same item at once, the latest save wins.</p></details>
+  </div>
+  <div data-stp="team" class="panel">
+    <h2>Crawl token <span class="pill">optional</span></h2>
     <p class="lead">If whoever deployed this site set a <code>CRAWL_TOKEN</code> on Netlify, enter it here so you can read websites.</p>
     <div class="row" style="flex-wrap:nowrap;max-width:520px"><input id="set-token" type="password" autocomplete="off" placeholder="Crawl token"><button class="btn ghost" id="set-token-save">Save</button></div>
   </div>
+</section>
+
+<section data-view="reports" class="hidden">
+  <div class="page-head"><h2>Reports</h2><p>A report for clients or managers: site health, Google search, AI answers, content and work done in a period. Download it, save it as a PDF, or share a link.</p></div>
+  <div class="panel">
+    <div class="grid3" style="margin-bottom:0">
+      <div class="field"><label for="rp-period">Period</label><select id="rp-period"><option value="30">Last 30 days</option><option value="this">This month</option><option value="last">Last month</option><option value="90">Last 90 days</option><option value="custom">Custom dates</option></select></div>
+      <div class="field"><label for="rp-from">From</label><input id="rp-from" type="date"></div>
+      <div class="field"><label for="rp-to">To</label><input id="rp-to" type="date"></div>
+    </div>
+    <div class="grid2" style="margin-bottom:0"><div class="field"><label for="rp-title">Report title</label><input id="rp-title"></div><div class="field"><label for="rp-client">Client or audience name</label><input id="rp-client"></div></div>
+    <div class="field"><label>Sections</label><div class="row" id="rp-secs"></div></div>
+    <div class="field"><label for="rp-summary">Summary <span>(edit freely; written automatically from the numbers)</span></label><textarea id="rp-summary" style="min-height:90px"></textarea></div>
+    <div class="row"><button class="btn" id="rp-build">Update preview</button><button class="btn ghost" id="rp-ai">Write the summary with AI</button><span class="status" id="rp-status" role="status"></span></div>
+    <details style="margin-top:14px"><summary><b>Your branding</b> <span class="status">(used on every report)</span></summary><div class="grid3" style="margin:10px 0 0">
+      <div class="field"><label for="rp-brand">Prepared by</label><input id="rp-brand" placeholder="e.g. your agency or team name"></div>
+      <div class="field"><label for="rp-color">Accent colour</label><input id="rp-color" type="color" value="#0f766e" style="height:40px"></div>
+      <div class="field"><label for="rp-logo">Logo <span>(PNG, JPG, SVG; under 300 KB)</span></label><input id="rp-logo" type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" style="width:auto"></div></div>
+      <div class="row"><button class="btn ghost small" id="rp-brand-save">Save branding</button><button class="btn ghost small" id="rp-logo-clear">Remove logo</button><span class="status" id="rp-brand-status"></span></div></details>
+  </div>
+  <div class="panel"><div class="row" style="justify-content:space-between;margin-bottom:10px"><h2 style="margin:0">Preview</h2>
+    <div class="row"><button class="btn ghost" id="rp-print">Print or save as PDF</button><button class="btn ghost" id="rp-html">Download file</button><button class="btn" id="rp-share">Create share link</button></div></div>
+    <div id="rp-share-out" class="status" style="margin-bottom:10px"></div>
+    <iframe id="rp-frame" title="Report preview" style="width:100%;height:900px;border:1px solid var(--line);border-radius:10px;background:#f5f6f8"></iframe>
+    <details style="margin-top:12px" id="rp-links-box"><summary><b>Active share links</b></summary><div id="rp-links" style="margin-top:8px"></div></details></div>
+</section>
+
+<section data-view="chat" class="hidden">
+  <div class="page-head"><h2>Ask AI</h2><p>Ask anything about your website and content. Answers use your own data (pages, keywords, knowledge base, Google data, site health, to-dos) and show their sources. Conversations stay in your browser.</p></div>
+  <div class="chat-wrap">
+    <div class="panel chat-list" aria-label="Conversations"><button class="btn small" id="chat-new" style="width:100%">New conversation</button><div id="chat-convs" style="margin-top:10px"></div></div>
+    <div class="panel chat-main"><div id="chat-msgs" aria-live="polite"></div>
+      <div class="chat-input"><textarea id="chat-text" rows="2" placeholder="Ask about your website, or ask for a draft… (Enter to send, Shift+Enter for a new line)" aria-label="Your message"></textarea><button class="btn" id="chat-send">Send</button></div>
+      <span class="status" id="chat-status" role="status"></span></div>
+  </div>
+</section>
+
+<section data-view="history" class="hidden">
+  <div class="page-head"><h2>Page history</h2><p>See how any page (yours or a competitor's) changed over time using the Internet Archive's free Wayback Machine. Compare two versions to see what changed before a traffic drop, or recover text from a deleted page.</p></div>
+  <div class="panel"><div class="row" style="flex-wrap:nowrap"><input id="wb-url" list="wb-pages" placeholder="https://www.example.com/page" aria-label="Page address" style="flex:1"><datalist id="wb-pages"></datalist><button class="btn" id="wb-go">Show history</button></div>
+    <span class="status" id="wb-status" role="status"></span></div>
+  <div id="wb-out"></div>
+</section>
+
+<section data-view="competitors" class="hidden">
+  <div class="page-head"><h2>Competitors</h2><p>Track competitors' websites through their public sitemaps: new pages they publish (and whether they're on your topics), pages they update and pages they remove. No AI and no cost.</p></div>
+  <div class="panel"><div class="row" style="flex-wrap:nowrap"><input id="cp-url" placeholder="https://competitor.com" aria-label="Competitor website" style="flex:2"><input id="cp-name" placeholder="Name (optional)" aria-label="Competitor name" style="flex:1"><button class="btn" id="cp-add">Track</button></div>
+    <span class="status" id="cp-status" role="status"></span></div>
+  <div id="cp-out"></div>
+</section>
+
+<section data-view="migration" class="hidden">
+  <div class="page-head"><h2>Site migration</h2><p>Changing page addresses (a redesign, a new CMS, merged sections)? Match every current page to its new address, export the redirects for your platform, and check them after launch, so no page that earns Google traffic is lost.</p></div>
+  <div class="panel"><h2>1. Current pages</h2><p class="status" style="margin-top:0">Your sitemap, every page with Google traffic, and the pages read.</p>
+    <div class="row"><button class="btn" id="mg-old">Load current pages</button><span class="status" id="mg-old-st" role="status"></span></div></div>
+  <div class="panel"><h2>2. New addresses</h2>
+    <textarea id="mg-new" style="min-height:90px" placeholder="Paste the new site's page addresses, one per line"></textarea>
+    <div class="row" style="margin-top:8px"><input id="mg-new-file" type="file" accept=".txt,.csv" aria-label="Upload a list of new addresses" style="max-width:260px"><span class="status">or</span><input id="mg-sitemap" placeholder="New site's sitemap, e.g. https://staging.example.com/sitemap.xml" aria-label="New sitemap address" style="flex:1"></div>
+    <div class="row" style="margin-top:8px"><button class="btn" id="mg-new-go">Use these addresses</button><span class="status" id="mg-new-st" role="status"></span></div></div>
+  <div id="mg-out"></div>
+</section>
+
+<section data-view="calendar" class="hidden">
+  <div class="page-head"><h2>Calendar</h2><p>Your content plan as a board: from idea to published, with owners and due dates. Pages you write appear here automatically and move as they're reviewed, approved and published. Shared with your team.</p></div>
+  <div class="panel"><div class="row" style="justify-content:space-between"><div class="row" role="group" aria-label="View"><button class="btn small" data-calv="board" aria-pressed="true">Board</button><button class="btn ghost small" data-calv="month" aria-pressed="false">Month</button></div>
+    <div class="row" id="cal-new-row"><input id="cal-title" placeholder="New card: title or keyword" aria-label="New card title or keyword" style="min-width:240px"><input id="cal-owner" list="cal-owners" placeholder="Owner" aria-label="Owner" style="width:140px"><datalist id="cal-owners"></datalist><input id="cal-due" type="date" aria-label="Due date" style="width:auto"><button class="btn" id="cal-add">Add card</button></div></div>
+    <span class="status" id="cal-st" role="status"></span></div>
+  <div id="cal-out"></div>
+  <div class="panel" id="cal-briefs"></div>
+</section>
+
+<section data-view="kb" class="hidden">
+  <div class="page-head"><h2>Knowledge base</h2><p>The business's own facts, product details, case studies and data. Every page, plan and review uses the most relevant parts, so the AI writes with real proof instead of placeholders.</p></div>
+  <div id="kb-sum"></div>
+  <div class="panel"><h2>Quick facts</h2><p class="lead">One fact per line as “Label: value”. These short facts are used on every page and to fact-check claims about the business.</p>
+    <textarea id="kb-facts" style="min-height:130px" placeholder="Founded: 2019&#10;Customers: 2,500+ companies in 40 countries&#10;Free trial: 14 days, no card needed&#10;Price: from $19 per user per month&#10;Support: 24/7 chat and email"></textarea>
+    <div class="row" style="margin-top:8px"><button class="btn" id="kb-facts-save">Save facts</button><span class="status" id="kb-facts-status" role="status"></span></div></div>
+  <div class="panel"><h2>Add a document</h2>
+    <div class="tabs2" role="group" id="kb-src" style="margin-top:0"><button data-ks="paste" aria-pressed="true">Paste</button><button data-ks="file" aria-pressed="false">Upload files</button><button data-ks="url" aria-pressed="false">From a web page</button></div>
+    <div class="grid2" style="margin-bottom:0"><div class="field"><label for="kb-title">Title</label><input id="kb-title" placeholder="e.g. Case study: Acme cut onboarding time by 60%"></div>
+      <div class="field"><label for="kb-kind">Type</label><select id="kb-kind"></select></div></div>
+    <div data-ksp="paste"><div class="field"><label for="kb-text">Text <span>(paste from Google Docs or Word: headings and lists are kept)</span></label><textarea id="kb-text" style="min-height:160px"></textarea></div></div>
+    <div data-ksp="file" class="hidden"><div class="field"><label for="kb-files">Files <span>(text, Markdown, HTML or CSV; several at once is fine. For PDFs or Word, copy the text and paste it)</span></label><input type="file" id="kb-files" multiple accept=".txt,.md,.markdown,.html,.htm,.csv" style="width:auto"></div></div>
+    <div data-ksp="url" class="hidden"><div class="field"><label for="kb-url">Web page address <span>(for example a product page, case study or help article)</span></label><input id="kb-url" placeholder="https://"></div></div>
+    <div class="row"><button class="btn" id="kb-add">Add to knowledge base</button><span class="status" id="kb-add-status" role="status"></span></div></div>
+  <div class="panel"><h2>Documents</h2><div id="kb-docs"></div></div>
+  <div class="panel"><h2>Test what the AI will find</h2><p class="lead">Type a topic or a page heading to see which passages the AI would be given.</p>
+    <div class="row" style="flex-wrap:nowrap"><input id="kb-q" placeholder="e.g. onboarding results" style="flex:1"><button class="btn ghost" id="kb-search">Search</button></div><div id="kb-results" style="margin-top:10px"></div></div>
 </section>
 
 <section data-view="rules" class="hidden">
@@ -610,6 +907,17 @@ a.trunc:hover{text-decoration:underline}
 
 <script src="vendor/marked.min.js"></script>
 <script src="vendor/jszip.min.js"></script>
+<div id="wizard" class="hidden" role="dialog" aria-modal="true" aria-labelledby="wz-title"><div class="card" id="wz-card"></div></div>
+<div id="gate" class="hidden" role="dialog" aria-modal="true" aria-labelledby="gate-title"><div class="card" id="gate-card"></div></div>
+<div class="ai-bar hidden" id="ai-bar" role="status" aria-live="polite"><span class="spin">AI is working…</span><button class="btn" id="ai-stop">Stop</button></div>
+<div class="toast hidden" id="toast" role="alert"><span id="toast-msg"></span><button id="toast-x" aria-label="Dismiss">✕</button></div>
 <script type="module" src="js/app.js"></script>
+<div class="cmd-back hidden" id="cmd-back">
+  <div class="cmd" role="dialog" aria-modal="true" aria-label="Go to a feature">
+    <input id="cmd-in" type="text" role="combobox" aria-expanded="true" aria-controls="cmd-list" aria-autocomplete="list" placeholder="Search features, tabs and actions… e.g. llms, images, brief" autocomplete="off" spellcheck="false">
+    <ul id="cmd-list" role="listbox" aria-label="Results"></ul>
+    <p class="cmd-hint"><kbd>↑</kbd><kbd>↓</kbd> to choose · <kbd>Enter</kbd> to open · <kbd>Esc</kbd> to close</p>
+  </div>
+</div>
 </body>
 </html>

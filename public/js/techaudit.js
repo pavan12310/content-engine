@@ -11,6 +11,7 @@ export const CHECKS = {
   missing_title: ["high", "Missing title tag", "Add a unique, descriptive title that matches what searchers want.", "The title is the main headline people see in Google."],
   duplicate_title: ["high", "Same title as another page", "Give each page its own title, or merge pages that cover the same thing.", "Duplicate titles make pages compete with each other and confuse searchers."],
   missing_h1: ["high", "Missing main heading (H1)", "Add one clear H1 stating the page's topic.", "The H1 tells readers and Google what the page is about."],
+  js_only_text: ["high", "Text only appears after JavaScript runs", "Render the main content into the HTML (server-side rendering or static generation), so it's there without running JavaScript.", "Google can render JavaScript but may index it later or partially; many AI crawlers don't run JavaScript at all, so they may see an empty page."],
   near_empty: ["high", "Almost no readable text", "Make sure the main content is in the HTML, not only loaded by JavaScript.", "Google and AI tools may see an empty page."],
   insecure_resources: ["medium", "Loads insecure (http) files", "Load images, scripts and styles over https.", "Browsers block or warn about mixed content, which breaks pages and hurts trust."],
   multiple_h1: ["medium", "More than one H1", "Keep one H1; turn the others into H2s. Repeated template blocks often cause this.", "Several main headings blur what the page is about."],
@@ -59,7 +60,9 @@ export function run(site, pages, opts = {}) {
     if (!meta) push("missing_meta", { url, detail: "" });
     else { grp(metas, lang + "|" + meta.toLowerCase(), url); if (meta.length < 70 || meta.length > 160) push("meta_length", { url, detail: `${meta.length} characters` }); }
     const wc = p.word_count || 0;
-    if (wc < 30) push("near_empty", { url, detail: `${wc} words` }); else if (wc < 300) push("thin", { url, detail: `${wc} words` });
+    if (p.text_from_scripts) push("js_only_text", { url, detail: `${wc} words found only in the page's JavaScript data` });
+    else if (wc < 30) push("near_empty", { url, detail: `${wc} words` });
+    if (!p.text_from_scripts && wc >= 30 && wc < 300) push("thin", { url, detail: `${wc} words` });
     if ((p.images_missing_alt || 0) > 0) push("images_missing_alt", { url, detail: `${p.images_missing_alt} of ${p.images || "?"} images` });
     if (p.internal_links === 0) push("no_internal_links", { url, detail: "" });
     if (complete && pages.length >= 20 && p.inbound_links === 0 && norm(url) !== norm(site.url)) push("few_inbound", { url, detail: "" });
@@ -97,5 +100,7 @@ export function run(site, pages, opts = {}) {
     counts: Object.fromEntries(Object.keys(SEV).map(s => [s, issues.filter(i => i.severity === s).reduce((a, i) => a + i.count, 0)])),
     issues, page_rows: pageRows, ignored_count: ignoredN, keys, has_traffic: traffic.size > 0,
     crawled_at: summ.crawled_at || "", crawl_id: summ.crawl_id || summ.crawled_at || "", complete,
-    note: complete ? "All pages on the site were checked." : `Checked the ${pages.length} pages read in the last crawl (out of ${summ.urls_discovered || "?"} on the site). Read more pages for fuller coverage.` };
+    blocked: summ.blocked_pages || 0,
+    note: (complete ? "All pages on the site were checked." : `Checked the ${pages.length} pages read in the last crawl (out of ${summ.urls_discovered || "?"} on the site). Read more pages for fuller coverage.`)
+      + (summ.blocked_pages ? ` ${summ.blocked_pages} page${summ.blocked_pages > 1 ? "s" : ""} couldn't be read because the site blocked or rate-limited the reader; they aren't counted as problems.` : "") };
 }
