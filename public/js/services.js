@@ -25,6 +25,10 @@ import * as INOW from "./indexnow.js";
 import * as WIKI from "./wiki.js";
 import * as GA4 from "./ga4.js";
 import * as TD from "./trackdiff.js";
+import * as RS from "./research.js";
+import * as KD from "./kwdata.js";
+import * as BL from "./backlinks.js";
+import * as FC from "./fullcrawl.js";
 import { LANGS, detectLang } from "./lang.js";
 import { BUSINESS_TYPES, FILLER_PHRASES, SEO, GOOGLE_UPDATES, GUARDRAILS, SCORECARD, MUST_PASS, INTENTS, PAGE_TYPES, HIGH_RISK_PAGE_TYPES, RELEASE_GATE, URL_ACTIONS, structureFor } from "./rules.js";
 
@@ -466,14 +470,32 @@ function topUpLinks(per, outline, pages, keyword, intent, exclude = new Set()) {
   }
   return per;
 }
-async function writeBySections({ s, kbUsed = new Set(), p, keyword, intent, b, author, valid, style, lang, notes, page_type, job, save, progress, count }) {
+// the page's text so far, from a JSON reply that's still arriving (the "body_markdown" value, decoded as far as it goes)
+export function partialBody(t) {
+  const i = String(t).indexOf('"body_markdown"'); if (i < 0) return "";
+  const q = t.indexOf('"', t.indexOf(":", i) + 1); if (q < 0) return "";
+  let out = "";
+  for (let k = q + 1; k < t.length; k++) { const c = t[k];
+    if (c === '"') break;
+    if (c !== "\\") { out += c; continue; }
+    const n = t[k + 1]; if (n === undefined) break;
+    if (n === "u") { const h = t.slice(k + 2, k + 6); if (h.length < 4) break; out += String.fromCharCode(parseInt(h, 16)); k += 5; continue; }
+    out += { n: "\n", t: "\t", r: "", '"': '"', "\\": "\\", "/": "/", b: "", f: "" }[n] ?? n; k++; }
+  return out;
+}
+async function writeBySections({ s, kbUsed = new Set(), p, keyword, intent, b, author, valid, style, lang, notes, page_type, job, save, progress, count, research = null, onDraft = null }) {
+  // each part gets only its most relevant source passages (small models can read only so much at once)
+  const kf = research ? RS.keyFacts(research, keyword, isFreeProvider() ? 4 : 6) : "";
+  const srcFor = (q, words) => research ? [kf, RS.select(research, q, words).text].filter(Boolean).join("\n\n") : "";
+  // live writing: what's written so far, plus the part being written now
+  const live = (cur = "") => onDraft && onDraft([st?.meta?.h1 ? `# ${st.meta.h1}` : "", st?.meta?.intro || "", ...Object.keys(st?.sections || {}).map(Number).sort((x, y) => x - y).map(k => st.sections[k]).filter(Boolean), cur, st?.faq || ""].filter(Boolean).join("\n\n"));
   const outline = normaliseOutline(b.outline); b.outline = outline;
   if (outline.length < 2) throw new GuardrailError("The page plan came back without enough sections. Try again, or choose another model.");
   const st = job.sbs || (job.sbs = { sections: {} });
   // 1. title, description, H1 and intro
   if (!st.meta) {
     progress("Writing the title and introduction (2/4)…");
-    const m = await ask("page_meta", P.pageMeta(s, keyword, intent, b, author, style, lang), { maxTokens: 900 }); count();
+    const m = await ask("page_meta", P.pageMeta({ ...s, research: srcFor(`${keyword} ${b.h1 || ""}`, isFreeProvider() ? 280 : 450) }, keyword, intent, b, author, style, lang), { maxTokens: 900 }); count();
     st.meta = { title_tag: String(m.title_tag || b.main_question || keyword).slice(0, 70), meta_description: String(m.meta_description || "").slice(0, 170),
       slug: m.slug || keyword, h1: String(m.h1 || b.main_question || keyword).replace(/^#+\s*/, ""), intro: String(m.intro || b.direct_answer || "").replace(/^#+.*\n/gm, "").trim() };
     await save({ sbs: st });
@@ -490,20 +512,21 @@ async function writeBySections({ s, kbUsed = new Set(), p, keyword, intent, b, a
     progress(`Writing section ${i + 1} of ${outline.length}: ${sec.h2.slice(0, 60)} (2/4)…`);
     const kbs = s.id ? await KB.knowledgeFor(s.id, `${sec.h2} ${sec.notes || ""} ${keyword}`, { k: 3, budgetWords: isFreeProvider() ? 380 : 600 }) : { text: "", sources: [] };
     kbs.sources.forEach(t => kbUsed.add(t));
-    const sSec = kbs.text ? { ...s, knowledge: kbs.text } : { ...s, knowledge: "" };
-    const ask1 = (fix, cur) => askText("section", P.section(sSec, keyword, intent, b, sec, i, prev.slice(-300), per[i], target, notes, style, lang, fix, cur), { maxTokens: Math.round(target * 2.6) + 300 });
+    const sSec = { ...s, knowledge: kbs.text || "", research: srcFor(`${sec.h2} ${sec.notes || ""} ${(sec.h3 || []).join(" ")} ${keyword}`, isFreeProvider() ? 420 : 700) };
+    const ask1 = (fix, cur) => askText("section", P.section(sSec, keyword, intent, b, sec, i, prev.slice(-300), per[i], target, notes, style, lang, fix, cur), { onToken: onDraft ? t => live(t) : null, maxTokens: Math.round(target * 2.6) + 300 });
     let r = await ask1(null, ""); count(); let md = normaliseSection(r.text, sec.h2);
     const probs = sectionProblems(md, sec, target, keyword) + (r.truncated ? "; it was cut off: finish it, a little shorter" : "");
     if (probs) { progress(`Improving section ${i + 1} of ${outline.length} (2/4)…`); r = await ask1(probs, md); count(); const md2 = normaliseSection(r.text, sec.h2); if (wordsOf(md2) >= wordsOf(md) * 0.6) md = md2; }
     // make sure its planned links are in it
     for (const l of per[i]) if (!md.includes(l.url)) md += `\n\nFor more on this, see [${l.anchor}](${l.url}).`;
-    st.sections[i] = md; await save({ sbs: st });
+    st.sections[i] = md; await save({ sbs: st }); live();
   }
   // 3. FAQ
   if (!st.faq) {
     progress("Writing the FAQ (2/4)…");
     const qs = (b.faqs || []).map(q => typeof q === "string" ? q : q.q).filter(Boolean).slice(0, 6);
-    const r = await askText("faq", P.faqSection(s, keyword, qs.length ? qs : [`What is ${keyword}?`, `How long does it take?`, `What do I need to get started?`], b, style, lang), { maxTokens: 1400 }); count();
+    live();
+    const r = await askText("faq", P.faqSection({ ...s, research: srcFor(`${keyword} ${qs.join(" ")}`, isFreeProvider() ? 350 : 600) }, keyword, qs.length ? qs : [`What is ${keyword}?`, `How long does it take?`, `What do I need to get started?`], b, style, lang), { maxTokens: 1400, onToken: onDraft ? t => live(t) : null }); count();
     st.faq = /^##\s/.test(r.text) ? r.text.replace(/^##\s+.*$/m, "## Frequently asked questions") : `## Frequently asked questions\n\n${r.text}`;
     await save({ sbs: st });
   }
@@ -514,7 +537,7 @@ async function writeBySections({ s, kbUsed = new Set(), p, keyword, intent, b, a
     body_markdown: body, faqs, internal_links: per.flat(), secondary_keywords: b.secondary_keywords || [], image_suggestions: [], proof_placeholders: [], ai_disclosure: "", cta: b.cta || "", written_by_sections: true };
 }
 // repair for section-by-section pages: rewrite only the sections with problems (max 3), one at a time
-async function repairBySections({ s, keyword, intent, b, payload, val, ev, fixes, style, lang, notes, page_type, progress, count, round }) {
+async function repairBySections({ s, keyword, intent, b, payload, val, ev, fixes, style, lang, notes, page_type, progress, count, round, research = null }) {
   const md = payload.body_markdown, secs = sections(md).filter(x => !/faq|frequently asked/i.test(x.heading)), lines = md.split("\n");
   const text = x => lines.slice(x.start, x.end + 1).join("\n");
   const want = new Map(); const add = (i, why) => { if (i < 0) return; want.set(i, [...(want.get(i) || []), why]); };
@@ -539,7 +562,9 @@ async function repairBySections({ s, keyword, intent, b, payload, val, ev, fixes
     const ls = out.split("\n"), cur = ls.slice(x.start, x.end + 1).join("\n"), sec = (b.outline || []).find(o => o.h2 === x.heading) || { h2: x.heading, notes: "" };
     const target = Math.max(150, Math.round(wordsOf(cur) * (why.some(w => /expand|longer|short/.test(w)) ? 1.4 : 1)));
     progress(`Improving “${x.heading.slice(0, 50)}”, round ${round} (3/4)…`);
-    const r = await askText("section", P.section(s, keyword, intent, b, sec, i, "", [], target, notes, style, lang, [...new Set(why)].join("; "), cur), { maxTokens: Math.round(target * 2.6) + 300 }); count();
+    // the same numbered sources as when it was written, so its citations stay valid
+    const sR = research ? { ...s, research: RS.select(research, `${sec.h2} ${sec.notes || ""} ${keyword}`, isFreeProvider() ? 420 : 700).text } : s;
+    const r = await askText("section", P.section(sR, keyword, intent, b, sec, i, "", [], target, notes, style, lang, [...new Set(why)].join("; ") + (research ? "; keep the source citations like [2] that are still accurate" : ""), cur), { maxTokens: Math.round(target * 2.6) + 300 }); count();
     const nu = normaliseSection(r.text, x.heading);
     if (wordsOf(nu) < wordsOf(cur) * 0.6) continue;   // a worse rewrite is ignored
     // keep links that were in the old version
@@ -618,12 +643,14 @@ const JOB = id => `genjob:${id}`;
 export async function checkpoint(id) { return store.get(JOB(id), null); }
 export async function dropCheckpoint(id) { return store.del(JOB(id)); }
 
-export async function generate(id, args, progress = () => {}) {
+export async function generate(id, args, progress = () => {}, onDraft = null) {
   startMeter();
-  try { return await generateInner(id, args, progress); } finally { stopMeter(); }
+  let last = 0, pend = null, timer = null;
+  const draft = onDraft ? md => { pend = md; const now = Date.now(); if (now - last >= 120) { last = now; onDraft(md); pend = null; } else if (!timer) timer = setTimeout(() => { timer = null; if (pend != null) { last = Date.now(); onDraft(pend); pend = null; } }, 130); } : null;
+  try { return await generateInner(id, args, progress, draft); } finally { stopMeter(); clearTimeout(timer); }
 }
-async function generateInner(id, args, progress) {
-  let { keyword, intent, page_type, audience = "", notes = "", author = "", override_duplicate = false, verify_claims = true, resume = false } = args;
+async function generateInner(id, args, progress, onDraft = null) {
+  let { keyword, intent, page_type, audience = "", notes = "", author = "", override_duplicate = false, verify_claims = true, resume = false, research: doResearch = true, source_urls = [], research_exclude = [] } = args;
   const [s, p] = await ctx(id);
   keyword = keyword.trim();
   if (!PAGE_TYPES.includes(page_type)) throw new GuardrailError(`Unknown page type. Use one of: ${PAGE_TYPES.join(", ")}`);
@@ -661,6 +688,16 @@ async function generateInner(id, args, progress) {
   if (!job || job.keyword !== keyword || job.page_type !== page_type || job.intent !== intent) job = { keyword, intent, page_type, step: 0, rounds: [], started: Date.now() };
   else warnings.push(`Resumed from step ${job.step} after an interruption.`);
   const save = async patch => { Object.assign(job, patch, { at: Date.now() }); await store.set(JOB(id), job); };
+  // read sources before writing (web search if set up, Wikipedia, the addresses given), like an AI that browses
+  if (doResearch && !job.research) {
+    const urls = (Array.isArray(source_urls) ? source_urls : String(source_urls || "").split(/\s+/)).map(x => String(x).trim()).filter(x => /^https?:\/\//i.test(x)).slice(0, 8);
+    try { let { r, reused } = await researchFor(id, keyword, urls, progress);
+      if (Array.isArray(research_exclude) && research_exclude.length) r = RS.without(r, research_exclude);
+      await save({ research: r }); if (reused) warnings.push("Reused the sources read for this topic in the last 24 hours.");
+      if (r.sources.length) warnings.push(`Read ${r.sources.length} source${r.sources.length > 1 ? "s" : ""} before writing.`); r.notes.slice(0, 3).forEach(n => warnings.push(n)); }
+    catch (e) { await save({ research: { sources: [], passages: [], notes: [e.message] } }); warnings.push(`Couldn't read sources: ${e.message}`); }
+  }
+  let research = job.research && job.research.sources.length ? job.research : null;
   const calls = { ai: 0 }; const ask2 = (...a) => { calls.ai++; return ask(...a); };
   // hybrid mode: the free model writes; a paid model plans (optional), reviews, repairs and fact-checks
   const reviewer = hybridReviewer(), planner = reviewer && hybridSettings().plan ? reviewer : null;
@@ -676,6 +713,13 @@ async function generateInner(id, args, progress) {
     await save({ step: 2, b, sat });
   }
   const b = job.b, sat = job.sat;
+  if (research && !job.deep && searchConfigured()) {
+    const { fetchPage, extract } = await import("./crawler.js");
+    const readPage = async u => { const r = await fetchPage(u, { retries: 0 }); if (!r || r.status !== 200 || !r.body) throw new Error(r && r.status ? `it returns ${r.status}` : "no answer"); const d = extract(u, r.body, new URL(u).host); return { title: d.title, text: d._text || "" }; };
+    try { const before = research.sources.length; research = await RS.deepen(research, { keyword, headings: normaliseOutline(b.outline).map(o => o.h2), siteUrl: s.url, readPage, progress, maxNew: isFreeProvider() ? 3 : 4 });
+      if (research.sources.length > before) warnings.push(`Deep research: read ${research.sources.length - before} more source${research.sources.length - before > 1 ? "s" : ""}, one per section.`); } catch { }
+    await save({ research, deep: true });
+  }
   if (sat.best_format && !["guide", "explainer"].includes(sat.best_format) && sat.format_reason) warnings.push(`Best format for this searcher: ${sat.best_format}. ${sat.format_reason}`);
   const outline = normaliseOutline(b.outline).map(o => o.h2);
   // 3. write: whole page at once, or section by section (automatic for free models, or by choice in Writing style)
@@ -683,8 +727,9 @@ async function generateInner(id, args, progress) {
   if (bySections) warnings.push("Written section by section, so each part gets the model's full attention.");
   if (job.step < 3) {
     let payload;
-    if (bySections) payload = await writeBySections({ s: sK, kbUsed, p, keyword, intent, b, author, valid, style, lang, notes, page_type, job, save, progress, count: () => calls.ai++ });
-    else { progress("Writing the page (2/4)…"); payload = await ask2("article", P.article(sK, keyword, intent, page_type, b, author, valid, null, null, style, lang), { maxTokens: 16000 }); }
+    if (bySections) payload = await writeBySections({ s: sK, kbUsed, p, keyword, intent, b, author, valid, style, lang, notes, page_type, job, save, progress, count: () => calls.ai++, research, onDraft });
+    else { progress("Writing the page (2/4)…"); payload = await ask2("article", P.article(research ? { ...sK, research: [RS.keyFacts(research, keyword, 8), RS.select(research, `${keyword} ${outline.join(" ")}`, 1600).text].filter(Boolean).join("\n\n") } : sK, keyword, intent, page_type, b, author, valid, null, null, style, lang), { maxTokens: 16000, onToken: onDraft ? t => { const md = partialBody(t); if (md) onDraft(md); } : null }); }
+
     await save({ step: 3, payload });
   }
   let payload = job.payload, val, ev, g; const rounds = job.rounds || [], autoFixed = [];
@@ -716,7 +761,7 @@ async function generateInner(id, args, progress) {
       if (!m.changed && !res.title_tag && !res.meta_description) { await save({ payload, rounds }); break; }   // nothing changed: don't pay to re-review the same page
     } else if (bySections) {
       Object.defineProperty(b, "_pages", { value: p, enumerable: false, configurable: true });
-      const rr = await repairBySections({ s: sK, keyword, intent, b, payload, val, ev, fixes, style, lang, notes, page_type, progress, count: () => calls.ai++, round: r });
+      const rr = await repairBySections({ s: sK, keyword, intent, b, payload, val, ev, fixes, style, lang, notes, page_type, progress, count: () => calls.ai++, round: r, research });
       payload = rr.payload; rounds[rounds.length - 1].repair = `${rr.changed} section${rr.changed === 1 ? "" : "s"} improved`;
       if (!rr.changed && !fixes.some(f => /title tag|meta description/i.test(f))) { await save({ payload, rounds }); break; }   // nothing more a rewrite can fix
     } else if (structural) {
@@ -776,7 +821,26 @@ async function generateInner(id, args, progress) {
   else warnings.push("No knowledge base for this website yet. Adding product details, case studies and quick facts (Knowledge base in the menu) gives the AI real proof to use, so pages need fewer placeholders.");
   const report = { knowledge: { sources: [...kbUsed], facts: kbAll.facts || 0 }, satisfaction_model: sat, structure, brief: b, matches, warnings, validation: val, evaluation: ev, claims, gate: g, rounds, status: g.status, language: lang.name, ai_calls: calls.ai, hybrid, usage: used,
     note: "Fill every placeholder with real proof and have the named author review before publishing." };
+  // copy check: sections that repeat a source word for word are rewritten in the AI's own words (once), then checked again
+  if (research && payload && payload.body_markdown) {
+    let cp = RS.copied(payload.body_markdown, research);
+    if (cp.length) {
+      progress(`Rewriting ${cp.length} passage${cp.length > 1 ? "s" : ""} copied from sources in the AI's own words…`);
+      const fixes = cp.map(c => `Section "${c.heading}": it copies a source word for word ("${c.text}…"); rewrite that part in your own words and keep the citation`);
+      try {
+        if (bySections) { const rr = await repairBySections({ s: sK, keyword, intent, b, payload, val, ev, fixes, style, lang, notes, page_type, progress, count: () => calls.ai++, round: (rounds.length || 0) + 1, research }); payload = rr.payload; }
+        else { const res = await ask2("repair_sections", P.repairSections(sK, keyword, intent, payload.body_markdown || "", fixes, valid, style, lang), { maxTokens: 8000 }); payload = { ...payload, body_markdown: mergeSections(payload.body_markdown || "", res).md }; }
+      } catch { }
+      cp = RS.copied(payload.body_markdown, research);
+      if (cp.length) report.warnings = [...(report.warnings || []), `Still copied word for word from a source: ${[...new Set(cp.map(c => `"${c.heading || "introduction"}"`))].join(", ")}. Rewrite those sentences before publishing.`];
+      else report.warnings = [...(report.warnings || []), "Passages copied from sources were rewritten in the AI's own words."];
+    }
+  }
+  // citations [n] become links, with a Sources list, at the very end (after every fix-up round, which may rewrite sections)
+  if (research && payload && payload.body_markdown) { const c = RS.cite(payload.body_markdown, research); payload.body_markdown = c.md; payload.html = mdToHtml(c.md); payload.sources_used = c.used;
+    if (c.removed) report.warnings = [...(report.warnings || []), `Removed ${c.removed} citation${c.removed > 1 ? "s" : ""} that the source didn't support. Check those sentences.`]; }
   const item = { id: store.newId(), keyword, intent, page_type, author, title: payload.title_tag || "", slug: payload.slug || "", payload, report, status: g.status, created_at: Date.now(),
+    research: job.research ? { sources: job.research.sources, used: payload.sources_used || [], notes: job.research.notes || [], log: (job.research.log || []).slice(0, 40) } : null,
     versions: [{ v: 1, at: Date.now(), source: "ai", note: "Written by AI", markdown: payload.body_markdown || "" }] };
   await rememberAuthor(author);
   // names and dates checked against Wikidata (best effort: at most 8 seconds, skipped in Demo mode or when offline)
@@ -1224,6 +1288,19 @@ export async function buildActions(id) {
   for (const g of rv?.review?.groups || []) { const acts = (g.urls || []).filter(u => ["merge", "redirect", "update"].includes(u.action));
     if (acts.length) out.push({ fingerprint: fp("urlmap", g.primary_url), link: { view: "urlmap", tab: "compete" }, source: "Competing pages", priority: ["P0", "P1", "P2", "P3"].includes(g.priority) ? g.priority : "P2", type: "consolidation",
       title: `Consolidate "${g.topic || ""}" into one main page`, detail: acts.map(u => `${u.action}: ${u.url}`).join("; ").slice(0, 600), urls: [g.primary_url, ...acts.map(u => u.url)], impact: "high", effort: "medium" }); }
+  try { const fs = await FC.summaryOf(id), labels = Object.fromEntries(FC.ISSUES.map(([k, l]) => [k, l])), PR = { error: "P1", noindex: "P2", no_title: "P1", redirect: "P2", canonical: "P2", dup_title: "P2", no_desc: "P3", no_h1: "P3", multi_h1: "P3", thin: "P3", slow: "P2", heavy: "P3", alt: "P3" };
+    if (fs) for (const [k, i] of Object.entries(fs.issues).filter(([, i]) => i.count).sort((a, b) => b[1].count - a[1].count).slice(0, 8)) {
+      const tpl = (i.where || []).filter(w => w.rate >= 0.8 && w.of >= 5);
+      out.push({ fingerprint: fp("fullcrawl", k), link: { view: "tech", tab: "full" }, source: "Whole-site crawl", priority: PR[k] || "P3", type: "fix",
+        title: `${labels[k]}: ${i.count.toLocaleString("en-US")} page${i.count === 1 ? "" : "s"}${tpl.length ? ` (template problem in ${tpl.map(w => w.section).join(", ")})` : ""}`,
+        detail: `Found by reading all ${fs.pages.toLocaleString("en-US")} pages. ${tpl.length ? `Nearly every page in ${tpl.map(w => `${w.section} (${w.n} of ${w.of})`).join(", ")} has it, so fixing that template once solves them.` : "Download the full list from Site health → Pages → Whole site."}`, urls: i.examples.slice(0, 20), impact: `${i.count} pages`, effort: tpl.length ? "low" : "medium" }); }
+  } catch { }
+  try { const bl = await BL.get(id);
+    for (const b of (bl?.broken || []).slice(0, 10)) out.push({ fingerprint: fp("bl-broken", b.url), link: { view: "tech", tab: "backlinks" }, source: "Backlinks", priority: b.links >= 5 ? "P1" : "P2", type: "redirect",
+      title: `Redirect ${b.url.replace(/^https?:\/\/[^/]+/, "") || "/"}: ${b.links} link${b.links === 1 ? "" : "s"} point to it, and it returns ${b.status || "an error"}`, detail: "Other websites link to this page, but it no longer works, so those links are wasted. Add a 301 redirect to the closest live page to win them back.", urls: [b.url], impact: `${b.links} links`, effort: "low" });
+    for (const l of (bl?.lost || []).filter(l => l.strength != null && l.strength >= 4).slice(0, 10)) out.push({ fingerprint: fp("bl-lost", l.from, l.to), link: { view: "tech", tab: "backlinks" }, source: "Backlinks", priority: "P2", type: "outreach",
+      title: `Lost a link from ${BL.hostOf(l.from)} (strength ${l.strength.toFixed(1)})`, detail: `${l.from} no longer links to ${l.to}. Check whether the page changed or the link moved; if it was removed, consider asking the site to restore it.`, urls: [l.from, l.to], impact: "strong link", effort: "medium" });
+  } catch { }
   const imps = await gscImports(id);
   if (imps.length) {
     const a = gsc.analyse(imps[0].rows, imps[1]?.rows || null);
@@ -1479,9 +1556,12 @@ export async function reportSummary(id, data) {
 // remember where a page was published (WordPress post id, links), so the next send updates it instead of creating a duplicate
 export async function markPublished(id, cid, info) {
   const all = await contents(id), it = all.find(c => c.id === cid); if (!it) throw new GuardrailError("Page not found.");
-  it.published = { platform: info.platform || "wordpress", id: info.id, status: info.status, link: info.link, edit_link: info.edit_link, site_url: info.site_url, post_type: info.post_type, at: Date.now(), by: info.by || "" };
+  // what's needed to update the same item next time, per platform (Framer project, Webflow collection, HubSpot blog), and where it lives
+  it.published = { platform: info.platform || "wordpress", id: info.id, status: info.status, link: info.link, edit_link: info.edit_link, site_url: info.site_url, post_type: info.post_type,
+    project_url: info.project_url, collection: info.collection, collection_id: info.collection_id, blog_id: info.blog_id, page_url: info.page_url, slug: info.slug, at: Date.now(), by: info.by || "" };
+  for (const k of Object.keys(it.published)) if (it.published[k] === undefined) delete it.published[k];
   it.updated_at = Date.now(); await store.set(`contents:${id}`, all);
-  if (info.status === "publish" && info.link) await inowQueue(id, info.link, "updated on WordPress", `${it.versions?.length || 1}:${Date.now() - (Date.now() % 60000)}`);
+  if ((info.status === "publish" || info.status === "live") && (info.page_url || info.link)) await inowQueue(id, info.page_url || info.link, `updated on ${{ framer: "Framer", webflow: "Webflow", hubspot: "HubSpot" }[info.platform] || "WordPress"}`, `${it.versions?.length || 1}:${Date.now() - (Date.now() % 60000)}`);
   return it.published;
 }
 
@@ -1713,7 +1793,7 @@ export async function chatContext(id, question, { budgetWords = 2500 } = {}) {
   return { text: blocks.join("\n\n"), sources };
 }
 const countWordsLite = t => (String(t || "").match(/\S+/g) || []).length;
-export async function chatSend(id, chatId, text) {
+export async function chatSend(id, chatId, text, onToken = null) {
   text = String(text || "").trim(); if (!text) throw new GuardrailError("Type a message.");
   const [s] = await ctx(id), all = (await store.get(CHAT(id), [])) || [];
   let c = all.find(x => x.id === chatId);
@@ -1721,7 +1801,7 @@ export async function chatSend(id, chatId, text) {
   const free = isFreeProvider() && !hybridReviewer();
   const cx = await chatContext(id, text, { budgetWords: free ? 1200 : 3000 });
   const history = c.messages.slice(-10).map(m => `${m.role === "user" ? "USER" : "ASSISTANT"}: ${String(m.content).slice(0, free ? 600 : 1500)}`).join("\n\n");
-  const r = await askText("chat", P.chat(s, cx.text, history, text, free), { maxTokens: free ? 900 : 2000 });
+  const r = await askText("chat", P.chat(s, cx.text, history, text, free), { maxTokens: free ? 900 : 2000, onToken });
   const cited = new Set([...r.text.matchAll(/\[(\d+)\]/g)].map(m => +m[1]));
   c.messages.push({ role: "user", content: text, at: Date.now() }, { role: "assistant", content: r.text, at: Date.now(), sources: cx.sources.filter(x => cited.has(x.n)), all_sources: cx.sources.length });
   c.updated_at = Date.now();
@@ -2020,6 +2100,23 @@ export async function dupCompare(id, a, b) {
   const read = async u => { const r = await fetchPage(u, { retries: 1 }); if (!r || r.status !== 200 || !r.body) throw new GuardrailError(`Couldn't read ${u} (${r?.status || "no answer"}).`); const d = extract(u, r.body, host); return { title: d.title || u, text: d._text || "" }; };
   const [A, B] = await Promise.all([read(a), read(b)]);
   return { a: { url: a, title: A.title }, b: { url: b, title: B.title }, ...DUPES.sideBySide(A.text, B.text) };
+}
+
+// ---------------- research (sources read before writing) ----------------
+async function researchFor(id, keyword, urls, progress = () => {}) {
+  const s = await site(id), pg = await pages(id), { fetchPage, extract } = await import("./crawler.js");
+  const readPage = async u => { const r = await fetchPage(u, { retries: 0 }); if (!r || r.status !== 200 || !r.body) throw new Error(r && r.status ? `it returns ${r.status}` : "no answer"); const d = extract(u, r.body, new URL(u).host); return { title: d.title, text: d._text || "" }; };
+  const ownUrls = findMatches(keyword, pg, 3).filter(m => m.similarity >= 0.2).map(m => m.url);
+  const ck = `research-cache:${id}:${keyword.toLowerCase()}|${urls.join(" ")}`, cached = await store.get(ck, null);
+  if (cached && Date.now() - cached.at < 864e5) return { r: cached.r, reused: true };
+  const r = await RS.gather({ keyword, siteUrl: s.url, urls, ownUrls, lang: (s.lang || "en").slice(0, 2), max: isFreeProvider() ? 6 : 7, progress, readPage });
+  await store.set(ck, { at: Date.now(), r }); return { r, reused: false };
+}
+export async function researchPreview(id, keyword, urls = [], progress = () => {}) {
+  keyword = String(keyword || "").trim(); if (!keyword) throw new GuardrailError("Type the main keyword first.");
+  const clean = (Array.isArray(urls) ? urls : []).map(x => String(x).trim()).filter(x => /^https?:\/\//i.test(x)).slice(0, 8);
+  const { r, reused } = await researchFor(id, keyword, clean, progress);
+  return { sources: r.sources, notes: r.notes, reused };
 }
 
 // ---------------- refresh drafts: an updated version of a live page, as tracked changes ----------------
@@ -2406,3 +2503,146 @@ export async function healthCounts(id) {
     images: im ? (im.images || []).filter(i => i.issues.some(x => x.level === "fail" || x.level === "warn")).length : null,
   };
 }
+
+// ---------------- AI editing ----------------
+// selected text: rewrite, shorten, expand, simplify, change tone, fix grammar, add an example, bullets, or a custom instruction
+export async function aiEdit(id, { keyword = "", text = "", action = "rewrite", instruction = "", before = "", after = "" }) {
+  text = String(text || ""); if (!text.trim()) throw new GuardrailError("Select some text in the editor first.");
+  if (text.length > 12000) throw new GuardrailError("That's a lot of text: select a section or a few paragraphs at a time.");
+  const s = await site(id), kb = await KB.knowledgeFor(id, `${keyword} ${text.slice(0, 300)}`, { k: 3, budgetWords: isFreeProvider() ? 300 : 600 });
+  const r = await askText("edit_text", P.editText(kb.text ? { ...s, knowledge: kb.text } : s, keyword, text, action, String(instruction || "").slice(0, 500), before, after), { maxTokens: Math.min(6000, Math.round(text.split(/\s+/).length * (action === "expand" ? 4 : 2.2)) + 300) });
+  const out = String(r.text || "").replace(/^```(?:markdown|md)?\s*|```\s*$/g, "").replace(/^"""\s*|\s*"""$/g, "").trim();
+  if (!out) throw new GuardrailError("The AI returned nothing. Try again.");
+  return { text: out };
+}
+// the whole page by instruction ("make the intro shorter and add a comparison table"): the result is reviewed as tracked changes
+export async function aiChangePage(id, cid, { instruction = "" }, onToken = null) {
+  instruction = String(instruction || "").trim().slice(0, 600); if (!instruction) throw new GuardrailError("Type what to change.");
+  const [all, i] = await loadItem(id, cid), item = all[i], s = await site(id), md = item.payload?.body_markdown || "";
+  const kb = await KB.knowledgeFor(id, `${item.keyword} ${instruction}`, { k: 4, budgetWords: isFreeProvider() ? 350 : 800 });
+  const r = await askText("change_page", P.changePage(kb.text ? { ...s, knowledge: kb.text } : s, item.keyword, md, instruction), { maxTokens: 16000, onToken });
+  const updated = String(r.text || "").replace(/^```(?:markdown|md)?\s*|```\s*$/g, "").trim();
+  if (!updated || updated.split(/\s+/).length < md.split(/\s+/).length * 0.3) throw new GuardrailError("The AI's version looked incomplete, so nothing was changed. Try again, or a smaller change.");
+  const n = TD.changes(TD.diff(md, updated)).length; if (!n) throw new GuardrailError("The AI didn't change anything. Try wording the instruction differently.");
+  item.refresh = { kind: "instruction", instruction, source_url: "", original: { markdown: md, title_tag: item.payload.title_tag || "", meta_description: item.payload.meta_description || "" }, updated, changes_ai: [{ what: instruction, why: "your instruction" }], applied: false };
+  item.updated_at = Date.now(); await store.set(`contents:${id}`, all); return { changes: n };
+}
+
+// ---------------- keyword demand from Bing (free) ----------------
+// fills the Volume column: empty ones, and Bing's own numbers once they're 30 days old; numbers you entered yourself are kept
+export async function keywordVolumes(id, { keywords: only = null, progress = () => {} } = {}) {
+  if (!KD.bingReady()) throw new GuardrailError("Add your free Bing Webmaster API key first (Settings → Google & Bing).");
+  const all = await keywords(id), want = only ? new Set(only.map(k => String(k).toLowerCase().trim())) : null;
+  const todo = all.filter(k => (want ? want.has(k.keyword) : true) && (k.volume == null || k.volume === "" || (k.volume_source === "bing" && Date.now() - (k.volume_at || 0) > 30 * 864e5))).slice(0, 100);
+  if (!todo.length) return { updated: 0, skipped: all.length, message: "Every keyword already has a number (yours are kept)." };
+  const r = await KD.volumes(todo.map(k => k.keyword), progress); let updated = 0;
+  for (const k of todo) { const v = r[k.keyword]; if (!v || v.error) continue;
+    Object.assign(k, { volume: v.monthly, volume_source: "bing", volume_at: Date.now(), trend: v.trend, demand: v.level, peak_month: v.peak_month }); updated++; }
+  await store.set(`keywords:${id}`, all);
+  return { updated, failed: todo.length - updated, stopped: r._stopped || "", more: Math.max(0, all.filter(k => k.volume == null).length) };
+}
+
+// for a list of searches: which already have a page on your site, and which are already in My keywords
+export async function coverageMany(id, list = []) {
+  const pg = await pages(id), ix = pg.length ? buildIndex(pg) : null, have = new Set((await keywords(id)).map(k => k.keyword)), out = {};
+  for (const kw of list.slice(0, 400).map(k => String(k).toLowerCase().trim()).filter(Boolean)) { const c = ix ? coverage(ix, kw, classify(kw).intent) : null; out[kw] = { status: c?.status || "unknown", url: c?.url || "", in_list: have.has(kw) }; }
+  return out;
+}
+
+// ---------------- This week: the 5 things that gain or protect the most clicks ----------------
+const weekId = (d = new Date()) => { const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); const day = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - day);
+  const y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1)); return `${t.getUTCFullYear()}-W${String(Math.ceil(((t - y0) / 864e5 + 1) / 7)).padStart(2, "0")}`; };
+// share of clicks a result usually gets at each position (a typical curve; used only to estimate the gain of moving up)
+const CTR_AT = p => p <= 1 ? 0.28 : p <= 2 ? 0.15 : p <= 3 ? 0.10 : p <= 4 ? 0.07 : p <= 5 ? 0.05 : p <= 6 ? 0.04 : p <= 7 ? 0.03 : p <= 8 ? 0.025 : p <= 10 ? 0.02 : p <= 15 ? 0.01 : 0.005;
+const path = u => String(u || "").replace(/^https?:\/\/[^/]+/, "") || "/";
+export async function thisWeek(id) {
+  const week = weekId(), st = (await store.get(`week:${id}`, null)) || {}, cur = st.week === week ? st : { week, done: [], skipped: [], last: st.week ? { week: st.week, done: (st.done || []).length, shown: st.shown || 0 } : st.last || null };
+  const c = [], add = x => { if (x.clicks == null || x.clicks >= 1) c.push(x); };
+  let pageClicks = new Map(), haveGoogle = false;
+  try {
+    const imps = await gscImports(id);
+    if (imps.length) {
+      haveGoogle = true; const a = gsc.analyse(imps[0].rows, imps[1]?.rows || null), m = 30 / Math.max(7, a.range?.days || 90);
+      for (const r of imps[0].rows) if (r.kind === "page") pageClicks.set(r.dim, (pageClicks.get(r.dim) || 0) + r.clicks * m);
+      for (const r of a.low_ctr.slice(0, 10)) add({ key: `ctr:${r.query || r.page}`, type: "title", clicks: r.missed_clicks * m, effort: "low",
+        title: `Rewrite the title and description for “${r.query || path(r.page)}”`, why: `${r.ctr}% of searchers click at position ${r.position}; similar results on your site get ${r.benchmark_ctr}%.`, link: r.query ? { view: "keyword", keyword: r.query } : { view: "tech", url: r.page } });
+      for (const r of a.striking_distance.slice(0, 10)) add({ key: `strike:${r.query}`, type: "page1", clicks: r.impressions * Math.max(0, CTR_AT(3) - CTR_AT(r.position)) * m * 0.5, effort: "medium",
+        title: `Push “${r.query}” onto page one`, why: `Position ${r.position} with ${fmtNum(Math.round(r.impressions * m))} impressions a month: strengthen the page that ranks for it.`, link: { view: "keyword", keyword: r.query } });
+      for (const d of a.declining_pages.slice(0, 10)) add({ key: `decline:${d.page}`, url: d.page, type: "refresh", clicks: (d.clicks_before - d.clicks_now) * m * 0.6, effort: "medium",
+        title: `Refresh ${path(d.page)}`, why: `Clicks down ${Math.abs(d.change_pct)}% (${d.clicks_before} → ${d.clicks_now}); position ${d.position_before} → ${d.position_now}.`, link: { view: "tech", url: d.page } });
+      for (const k of a.cannibalisation.slice(0, 5)) add({ key: `canni:${k.query}`, type: "merge", clicks: k.impressions * 0.01 * m, effort: "medium", rough: true,
+        title: `Choose one page for “${k.query}”`, why: `${k.pages.length} of your pages compete for it, so Google splits the clicks.`, link: { view: "gsc", tab: "compete" } });
+    }
+  } catch { }
+  try { const dc = await DECAY.get(id);
+    for (const p of (dc?.pages || []).slice(0, 10)) if (!c.some(x => x.url === p.url)) add({ key: `decay:${p.url}`, url: p.url, type: "refresh", clicks: (p.lost || 0) * 0.6, effort: "medium",
+      title: `Refresh ${path(p.url)}`, why: `It lost ${fmtNum(p.lost)} clicks a month since its peak (down ${p.decline}%).`, link: { view: "gsc", section: "decay" } }); } catch { }
+  try { const RK = await import("./rank-core.mjs"), RN = await import("./ranks.js"), snap = await RN.get(id);
+    if (snap) for (const r of RK.drops(RK.table(snap)).slice(0, 5)) add({ key: `drop:${r.keyword}`, type: "drop", clicks: (r.clicks28 || 0) * Math.min(1, Math.abs(r.change28) / 8), effort: "medium",
+      title: `Win back “${r.keyword}”`, why: `It dropped ${Math.abs(r.change28)} places in 4 weeks (now ${r.position}).`, link: { view: "gsc", section: "rankings" } }); } catch { }
+  try { const au = await auditFor(id);
+    for (const i of au.issues.filter(i => ["error", "high"].includes(i.severity)).slice(0, 8)) { const urls = (i.pages || []).map(x => x.url), at = urls.reduce((t, u) => t + (pageClicks.get(u) || 0), 0);
+      add({ key: `tech:${i.check}`, type: "fix", clicks: at >= 1 ? at : null, protects: true, effort: "low", score: i.count, pages: i.count,
+        title: `Fix “${i.label}” (${i.count} page${i.count > 1 ? "s" : ""})`, why: haveGoogle && at >= 1 ? `These pages get about ${fmtNum(Math.round(at))} clicks a month.` : i.fix.slice(0, 160), link: { view: "tech", check: i.check } }); } } catch { }
+  try { const bl = await BL.get(id);
+    for (const b of (bl?.broken || []).slice(0, 5)) add({ key: `reclaim:${b.url}`, url: b.url, type: "reclaim", clicks: null, score: b.links * 3, effort: "low", pages: null,
+      title: `Win back the links to ${path(b.url)}`, why: `${b.links} link${b.links === 1 ? "" : "s"} from other websites point to it, but it returns ${b.status || "an error"}: redirect it to the closest live page.`, link: { view: "tech", tab: "backlinks" } }); } catch { }
+  try { const ks = await keywordTable(id);
+    for (const k of ks.filter(k => k.volume > 0 && (k.business_value ?? 3) >= 3 && k.coverage && !["covered", "partial"].includes(k.coverage.status)).slice(0, 10))
+      add({ key: `gap:${k.keyword}`, type: "new", clicks: k.volume * (k.volume_source === "bing" ? 0.15 : 0.05), effort: "high", rough: true,
+        title: `Write a page for “${k.keyword}”`, why: `${fmtNum(k.volume)} searches a month${k.volume_source === "bing" ? " on Bing" : ""}, and no page on your site yet.`, link: { view: "keyword", keyword: k.keyword } }); } catch { }
+  const hidden = new Set([...(cur.done || []), ...(cur.skipped || [])]), per = {}, pick = [];
+  const rank = x => x.clicks != null ? x.clicks : Math.min(30, 4 + (x.score || 1) / 4);
+  for (const x of c.filter(x => !hidden.has(x.key)).sort((a, b) => rank(b) - rank(a))) { if ((per[x.type] || 0) >= 2) continue; per[x.type] = (per[x.type] || 0) + 1; pick.push({ ...x, clicks: x.clicks == null ? null : Math.round(x.clicks) }); if (pick.length >= 5) break; }
+  const today = new Date().toISOString().slice(0, 10), soon = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
+  const due = (await planItems(id)).filter(p => p.due && p.due <= soon && p.stage !== "published").map(p => ({ title: p.title || p.keyword, due: p.due, overdue: p.due < today, stage: p.stage })).sort((a, b) => a.due < b.due ? -1 : 1).slice(0, 6);
+  cur.shown = Math.max(cur.shown || 0, pick.length + (cur.done || []).length); cur.items = pick.map(x => ({ key: x.key, title: x.title })); await store.set(`week:${id}`, cur);
+  const results = [];
+  for (const e of ((await store.get(`weeklog:${id}`, [])) || []).filter(e => e.before != null && Date.now() - e.at >= 21 * 864e5).slice(0, 6)) {
+    const now = await clicksNow(id, e.key).catch(() => null); if (now == null) continue;
+    const [kind, ...rest] = e.key.split(":"), v = rest.join(":"), what = { ctr: "title rewrite", strike: "page-one push", decline: "refresh", decay: "refresh", drop: "win-back", gap: "new page", canni: "one main page" }[kind] || "change";
+    results.push({ label: `${what} for ${/^https?:/.test(v) ? path(v) : `“${v}”`}`, at: e.at, before: e.before, now, change: e.before ? Math.round((now / e.before - 1) * 100) : null });
+  }
+  return { week, items: pick, due, done: (cur.done || []).length, last: cur.last || null, have_google: haveGoogle, candidates: c.length, results };
+}
+const thisWeekCache = async id => ((await store.get(`week:${id}`, null)) || {}).items || [];
+async function clicksNow(id, key) {
+  const imps = await gscImports(id); if (!imps.length) return null;
+  const rows = imps[0].rows, m = 30 / Math.max(7, gsc.dateRange(rows)?.days || 90), [kind, ...rest] = String(key).split(":"), v = rest.join(":");
+  const sumOf = (k, dim) => Math.round(rows.filter(r => r.kind === k && r.dim === dim).reduce((t, r) => t + r.clicks, 0) * m);
+  if (["ctr", "strike", "canni", "drop", "gap"].includes(kind)) return /^https?:/.test(v) ? sumOf("page", v) : sumOf("query", v);
+  if (["decline", "decay"].includes(kind)) return sumOf("page", v);
+  return null;
+}
+export async function thisWeekMark(id, key, what = "done") {
+  const week = weekId(), st = (await store.get(`week:${id}`, null)) || {}, cur = st.week === week ? st : { week, done: [], skipped: [], last: st.week ? { week: st.week, done: (st.done || []).length, shown: st.shown || 0 } : null };
+  const list = what === "skip" ? "skipped" : "done"; cur[list] = [...new Set([...(cur[list] || []), String(key)])]; await store.set(`week:${id}`, cur);
+  // remember where it started, so Home can show the result a few weeks later
+  if (what === "done") { const log = (await store.get(`weeklog:${id}`, [])) || [], it = (await thisWeekCache(id)).find(x => x.key === key);
+    log.unshift({ key: String(key), title: it?.title || String(key), at: Date.now(), before: await clicksNow(id, key).catch(() => null) }); await store.set(`weeklog:${id}`, log.slice(0, 60)); }
+  return { ok: true };
+}
+
+// ---------------- backlinks (Bing) ----------------
+export async function backlinksRun(id, progress = () => {}) {
+  const s = await site(id), host = BL.hostOf(s.url), brand = [...new Set([String(s.name || "").toLowerCase().trim(), host.split(".")[0]].filter(x => x && x.length >= 3))];
+  const kws = (await keywords(id)).slice(0, 80).map(k => k.keyword);
+  const live = (await pages(id)).filter(p => !p.status || p.status < 400).map(p => p.url);
+  return BL.refresh(id, s.url, { brand, keywords: kws, livePages: live, progress });
+}
+export const backlinksGet = id => BL.get(id);
+
+// ---------------- the whole website (crawled in stages) ----------------
+export async function fullCrawlPrepare(id, progress = () => {}) {
+  const s = await site(id), { fetchPage } = await import("./crawler.js");
+  const ft = async u => { const r = await fetchPage(u, { retries: 1 }); return { status: r?.status || 0, text: r?.body || "" }; };
+  progress("Reading your sitemaps…");
+  const res = await COMP.collect(s.url, ft, { maxFiles: 60, maxUrls: 50000 }), host = new URL(s.url).hostname.replace(/^www\./, "");
+  const urls = [...Object.keys(res.urls || {}), ...(await pages(id)).map(p => p.url)].filter(u => { try { return new URL(u).hostname.replace(/^www\./, "") === host; } catch { return false; } });
+  if (!urls.length) throw new GuardrailError("No pages found in your sitemaps. Check Site health → Indexing → Sitemaps.");
+  return FC.prepare(id, s.url, urls);
+}
+export const fullCrawlRun = (id, progress) => FC.run(id, progress);
+export const fullCrawlPause = () => { FC.pause(); return { ok: true }; };
+export async function fullCrawlView(id) { return { status: await FC.status(id), summary: await FC.summaryOf(id), running: FC.running(id), issues: FC.ISSUES.map(([k, l]) => ({ key: k, label: l })) }; }
+export const fullCrawlCsv = id => FC.csv(id);

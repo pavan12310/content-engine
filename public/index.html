@@ -46,6 +46,7 @@ nav button.folded{display:none}
 nav .nav-more::after{content:"▸";margin-left:auto;font-size:11px;color:var(--muted);transition:transform .15s}nav .nav-more[aria-expanded=true]::after{transform:rotate(90deg)}
 nav button.nav-sub{padding-left:38px;font-size:13.5px}nav button.nav-sub.more-closed{display:none}
 .crumb{display:inline-block;margin-bottom:6px;font-size:13.5px}
+.live-cursor{display:inline-block;width:8px;height:1.05em;margin-left:2px;vertical-align:text-bottom;background:var(--accent);animation:blink 1s steps(2,start) infinite}@keyframes blink{to{visibility:hidden}}@media (prefers-reduced-motion:reduce){.live-cursor{animation:none}}
 nav .nav-search{all:unset;cursor:pointer;display:flex;align-items:center;gap:8px;margin:4px 0 6px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;color:var(--muted);font-size:13.5px;background:var(--panel)}
 nav .nav-search:hover{border-color:var(--accent)}nav .nav-search:focus-visible{outline:2px solid var(--accent);outline-offset:2px}nav .nav-search span{flex:1}
 kbd{font:11.5px/1 ui-monospace,monospace;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:2px 5px;color:var(--muted);background:var(--bg)}
@@ -552,6 +553,9 @@ a.trunc:hover{text-decoration:underline}
     </div>
     <div class="row" id="g-qbank-row" style="margin:0 0 4px"><button class="btn ghost small hidden" id="g-qbank" type="button">Add saved questions as FAQ ideas</button></div>
     <div class="field"><label for="g-notes">Your proof and notes <span>(data, customer examples, opinions, product details)</span></label><textarea id="g-notes" placeholder="The more first-hand material you add, the better the page. Anything missing becomes a placeholder for you to fill."></textarea></div>
+    <div class="field"><label class="check" style="margin:0"><input type="checkbox" id="g-research" checked> Read sources before writing <span class="status" style="font-weight:400">(web search if set up, Wikipedia, and your list below; the page cites them)</span></label>
+      <label for="g-sources" style="margin-top:6px">Sources to read <span>(optional: one web address per line, e.g. your product docs, studies, official guides)</span></label><textarea id="g-sources" rows="3" placeholder="https://..."></textarea>
+      <div class="row" style="margin-top:6px"><button type="button" class="btn ghost small" id="g-findsrc">Find sources</button><span class="status" id="g-srcst" role="status">See what will be read, and untick any you don't want.</span></div><div id="g-srclist"></div></div>
     <details class="style-box" id="g-style"><summary><b>Writing style for this website</b> <span class="status" id="g-style-sum"></span></summary>
       <div class="grid2" style="margin:12px 0 0">
         <div class="field"><label for="st-tone">Tone of voice</label><input id="st-tone" placeholder="e.g. friendly and direct, like a helpful expert"></div>
@@ -574,6 +578,9 @@ a.trunc:hover{text-decoration:underline}
       <li data-step="1">Understand and plan</li><li data-step="2">Write</li><li data-step="3">Check and fix</li><li data-step="4">Fact-check</li>
     </ol>
   </div>
+  <div class="panel hidden" id="g-live" aria-live="off"><div class="row" style="justify-content:space-between"><h2 style="margin:0;font-size:17px">Writing live <span class="pill" id="g-live-n"></span></h2><label class="check" style="margin:0"><input type="checkbox" id="g-live-follow" checked> Follow the text</label></div>
+    <p class="status" style="margin:4px 0 8px">The page as it's being written. Checks and fixes run after the first draft, so the final version can differ.</p>
+    <div class="preview" id="g-live-body" style="max-height:520px;overflow:auto"></div></div>
   <div id="g-out"></div>
 </section>
 
@@ -634,11 +641,21 @@ a.trunc:hover{text-decoration:underline}
         <select id="kw-bulk-value" style="width:auto"><option value="">Set value…</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
         <button class="btn ghost small" id="kw-bulk-del">Remove</button><button class="btn ghost small" id="kw-bulk-clear">Clear selection</button>
       </div>
+      <div class="row" style="margin:6px 0 8px;gap:8px"><label for="kw-mkt" class="status" style="margin:0">Search numbers for</label><select id="kw-mkt" style="width:auto"></select><button class="btn ghost small" id="kw-vol">Get search numbers (Bing)</button><span class="status" id="kw-volst" role="status">Free: monthly searches on Bing, with the trend. Numbers you entered are kept.</span></div>
       <div id="kw-out"></div>
     </div>
   </div>
 
   <div data-kp="ideas" class="hidden">
+    <div class="panel" id="rs-panel">
+      <h2>Real searches people type <span class="pill">free</span></h2>
+      <p class="lead">What people actually type into Google, Bing and YouTube around a topic, grouped into questions and comparisons, plus related searches on Bing with their monthly numbers.</p>
+      <div class="grid2" style="margin-bottom:0"><div class="field"><label for="rs-seed">Topic or keyword</label><input id="rs-seed" placeholder="e.g. screen recorder"></div>
+        <div class="field"><label for="rs-exp">Look for</label><select id="rs-exp"><option value="questions">Questions and comparisons</option><option value="az">Everything (A to Z after the keyword)</option><option value="none">Just this keyword</option></select></div></div>
+      <div class="row" style="gap:14px;margin:4px 0"><span class="status">From:</span><label class="check" style="margin:0"><input type="checkbox" data-rssrc="google" checked> Google</label><label class="check" style="margin:0"><input type="checkbox" data-rssrc="bing" checked> Bing</label><label class="check" style="margin:0"><input type="checkbox" data-rssrc="youtube"> YouTube</label></div>
+      <div class="row" style="margin-top:8px"><button class="btn" id="rs-go">Find real searches</button><button class="btn ghost" id="rs-rel">Related on Bing, with numbers</button><span class="status" id="rs-st" role="status"></span></div>
+      <div id="rs-out"></div>
+    </div>
     <div class="panel">
       <h2>Find keyword ideas</h2>
       <p class="lead">Enter a topic. The AI suggests searches your buyers make that fit what you sell, and each idea is checked against your existing pages straight away.</p>
@@ -762,6 +779,10 @@ a.trunc:hover{text-decoration:underline}
     <p class="status" style="margin-top:0">In <b>Bing Webmaster Tools</b> (free; add your site there, or import it from Google Search Console in one click), open <b>Settings → API access → API key</b>, generate a key and paste it here. It stays in this browser.</p>
     <div class="row" style="flex-wrap:nowrap"><input id="bk-key" type="password" autocomplete="off" placeholder="Bing API key (32 letters and numbers)" aria-label="Bing API key"><button class="btn" id="bk-save">Save</button></div>
     <span class="status" id="bk-status" role="status"></span>
+    <h3 style="font-size:15px;margin:16px 0 4px">Open PageRank key <span class="pill">optional, free</span></h3>
+    <p class="status" style="margin-top:0">Shows how strong each website linking to you is (Site health → Links → Backlinks). Sign up free at openpagerank.com and copy the API key.</p>
+    <div class="row" style="flex-wrap:nowrap"><input id="opr-key" type="password" autocomplete="off" placeholder="Open PageRank API key" aria-label="Open PageRank API key"><button class="btn" id="opr-save">Save</button></div>
+    <span class="status" id="opr-status" role="status"></span>
   </div>
   <div data-stp="ai" class="panel settings-ai" id="search-panel">
     <h2>Web search for the free AI options <span class="pill">optional</span></h2>

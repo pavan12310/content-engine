@@ -11,7 +11,7 @@ let ACCOUNT = null;
 export function setAccountMode(a) { ACCOUNT = a; }
 // the identification the server expects: the signed-in workspace, or the team password (null when neither is on)
 export function authHeaders() { if (ACCOUNT) return { "x-workspace": ACCOUNT.workspace.id }; const s = syncSettings(); return s.enabled && s.teamKey ? { "x-team-key": s.teamKey } : null; }
-const EXCLUDE = /^(genjob|chat|wbcache|qxcache|wkcache|linkmap-cache|decaymonths|ranks)[:-]/;   // writing checkpoints, personal chats and the page-history cache stay on this device   // writing checkpoints and personal chat conversations stay on this device                       // in-progress writing checkpoints stay on this device
+const EXCLUDE = /^(genjob|chat|wbcache|qxcache|wkcache|linkmap-cache|decaymonths|ranks|research-cache|fc)[:-]/;   // writing checkpoints, personal chats and the page-history cache stay on this device   // writing checkpoints and personal chat conversations stay on this device                       // in-progress writing checkpoints stay on this device
 const MAX_BATCH_CHARS = 4_000_000, MAX_ITEMS = 20;
 const ls = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || "null") ?? d; } catch { return d; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } };

@@ -103,7 +103,9 @@ export async function mockResponse(task, prompt) {
   if (task === "section") { const h = (prompt.match(/^YOUR SECTION \(#(\d+)\): "## (.+)"$/m) || [0, "1", "Section"]); const n = +h[1];
     const fixing = prompt.startsWith("Rewrite");
     const link = (prompt.match(/\]\((https?:\/\/[^)\s]+)\)/) || [])[1];
-    return `## ${h[2]}\n\n` + [1, 2, 3].map(k => `Section ${n} ${fixing ? "(improved) " : ""}paragraph ${k}: a specific, practical point about ${h[2].toLowerCase()} with a concrete example a reader can apply today, and one more detail that makes it useful.`).join("\n\n")
+    // with sources: use the first passage and cite it, the way a real model is asked to
+    const src = /SOURCES YOU HAVE READ/.test(prompt) ? prompt.match(/^\[(\d+)\] ((?:\S+\s+){8,14})/m) : null;
+    return `## ${h[2]}\n\n` + [1, 2, 3].map(k => `Section ${n} ${fixing ? "(improved) " : ""}paragraph ${k}: a specific, practical point about ${h[2].toLowerCase()} with a concrete example a reader can apply today, and one more detail that makes it useful.`).join("\n\n") + (src ? `\n\nOne source puts it this way: ${src[2].trim().replace(/[.,;:]$/, "")} [${src[1]}].` : "")
       + `\n\n1. A clear first step for ${h[2].toLowerCase()}\n2. A second step with a detail\n3. A third step to finish` + (link ? `\n\nSee [this related guide](${link}) for more.` : "") + (n === 1 ? "\n\n[ADD SCREENSHOT: the finished result]" : ""); }
   if (task === "faq") { const qs = [...prompt.matchAll(/^- (.+\?)$/gm)].map(m => m[1]).slice(0, 5); return `## Frequently asked questions\n\n` + (qs.length ? qs : ["How long does it take?", "What do I need?", "Is it free?"]).map((q, i) => `### ${q}\n\nAnswer ${i + 1}: a direct answer in two sentences. It stands on its own.`).join("\n\n"); }
   if (task === "serp_results") { const urls = [...prompt.matchAll(/^URL: (\S+)/gm)].map(m => m[1]);
@@ -141,6 +143,11 @@ export async function mockResponse(task, prompt) {
       question_headings: [{ from: "Features", to: "What can you do with it?" }, { from: "Pricing", to: "How much does it cost?" }], facts_to_add: ["How long a typical recording takes to turn into a guide", "Which languages the voiceover supports"] }; }
   if (task === "alt_text") { const rows = [...prompt.matchAll(/^(\d+)\. file: ([^|]+)\|/gm)];
     return { alts: rows.map(m => ({ n: +m[1], alt: `${m[2].trim().replace(/\.[a-z0-9]+$/i, "").replace(/[-_]+/g, " ")} shown in the product interface`.slice(0, 90), check: true })) }; }
+  if (task === "edit_text") { const t = (prompt.split('TEXT TO EDIT:\n"""\n')[1] || "").split('\n"""')[0]; const task2 = (prompt.match(/^TASK: (.*)$/m) || [])[1] || "";
+    return /half as long/.test(task2) ? t.split(/(?<=[.!?])\s+/).slice(0, Math.max(1, Math.ceil(t.split(/(?<=[.!?])\s+/).length / 2))).join(" ") : /bulleted list/.test(task2) ? t.split(/(?<=[.!?])\s+/).map(x => `- ${x}`).join("\n") : `${t} (edited: ${task2.split(/[.;]/)[0].toLowerCase()})`; }
+  if (task === "change_page") { const md = (prompt.split('THE CURRENT PAGE (Markdown):\n"""\n')[1] || "").split('\n"""\nRules:')[0]; const parts = md.split(/\n\n/);
+    const i = parts.findIndex((x, k) => k > 0 && !/^#/.test(x)); if (i > 0) parts[i] = parts[i].split(/(?<=[.!?])\s+/)[0]; parts.push("| Option | Best for |\n|---|---|\n| Option A | Teams |\n| Option B | Solo creators |");
+    return parts.join("\n\n"); }
   if (task === "audit") return { scores: Array.from({ length: 10 }, (_, i) => ({ q: i + 1, score: 1, reason: "demo" })), intent: { detected: "how_to", matches_keyword: true, note: "" },
     duplicates: [], risk_flags: [], internal_links: u.slice(0, 3).map(x => ({ url: x, anchor: "x" })), satisfaction: { score: 70, missing: ["Example"] }, task_completion: { score: 65, blockers: [] },
     ai_citation_readiness: { score: 60, weak_passages: [] }, spam_risk: [], suggested_title_tag: "Demo", suggested_meta_description: "Demo", suggested_h2s: [], suggested_faqs: [], top_fixes: ["Demo fix"] };

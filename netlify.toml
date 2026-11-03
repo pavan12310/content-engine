@@ -2,6 +2,11 @@
   publish = "public"
   # no build step needed: the app is plain HTML + JavaScript
 
+[build.environment]
+  # Framer publishing uses the official framer-api package, which needs Node 22 for functions
+  AWS_LAMBDA_JS_RUNTIME = "nodejs22.x"
+  NODE_VERSION = "22"
+
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"

@@ -2,7 +2,10 @@
 import { BUSINESS_TYPES, SEO, INTENTS, SCORECARD, PAGE_TYPES, STRUCTURES, SATISFACTION_FACTORS, SOURCE_TIERS, SPAM_RISK_CHECKS, URL_ACTIONS } from "./rules.js";
 const J = x => JSON.stringify(x);
 // the business's own knowledge (facts, case studies, product details) retrieved for this step
-export const kbLine = site => site?.knowledge ? `\nTHE PUBLISHER'S OWN KNOWLEDGE (real facts, examples and proof from the business. Use them wherever relevant instead of placeholders, keep numbers exactly as given, never contradict them, and never invent beyond them):\n"""\n${String(site.knowledge).slice(0, 12000)}\n"""\n` : "";
+export const kbLine = site => kbOnly(site) + srcLine(site);
+// sources the app read for this page (numbered passages): use their facts and cite them
+export const srcLine = site => site?.research ? `\nSOURCES YOU HAVE READ (passages from web pages and Wikipedia, numbered by source):\n"""\n${String(site.research).slice(0, 9000)}\n"""\nUse facts from these sources where they help the reader, and put the source number in square brackets right after the sentence that uses it, like this: [2]. Only cite numbers listed above. Rewrite in your own words; never copy sentences. Prefer the publisher's own knowledge when the two differ. If the sources don't cover something, use a placeholder as usual.\n` : "";
+const kbOnly = site => site?.knowledge ? `\nTHE PUBLISHER'S OWN KNOWLEDGE (real facts, examples and proof from the business. Use them wherever relevant instead of placeholders, keep numbers exactly as given, never contradict them, and never invent beyond them):\n"""\n${String(site.knowledge).slice(0, 12000)}\n"""\n` : "";
 export const typeLine = site => BUSINESS_TYPES[site?.business_type] && BUSINESS_TYPES[site.business_type].guidance ? `\nTYPE OF WEBSITE: ${BUSINESS_TYPES[site.business_type].label}. ${BUSINESS_TYPES[site.business_type].guidance}\n` : "";
 export const langLine = lang => lang && lang.name && !/^english/i.test(lang.name) ? `\nLANGUAGE: write everything (headings, text, title tag, meta description, FAQs) in ${lang.name}. Keep the keyword as given.\n` : "";
 export function styleText(style) {
@@ -665,3 +668,29 @@ export const altText = (site, items) => `Write alt text for images on ${site.nam
 Good alt text says what the image shows and why it's there, in 5-15 words, without "image of" or "picture of", in the page's language. For logos, write the company name and "logo". If the context isn't enough to know what it shows, write your best description and set "check" to true.
 ${items.map((x, i) => `${i + 1}. file: ${x.file} | page: ${x.page} | text near it: ${x.context || "(none)"}`).join("\n")}
 Return JSON: {"alts":[{"n":1,"alt":"","check":false}]}`;
+
+// ---------------- AI editing (selected text, or the whole page by instruction) ----------------
+export const EDIT_ACTIONS = { rewrite: "Rewrite it more clearly, keeping the meaning", shorten: "Make it about half as long, keeping the key points", expand: "Expand it with more specific, practical detail (no invented facts or numbers)",
+  simplify: "Use simpler words and shorter sentences", friendlier: "Make the tone warmer and more conversational", professional: "Make the tone more professional", grammar: "Fix spelling, grammar and punctuation only; change nothing else",
+  example: "Add one short, concrete example (use a placeholder like [ADD EXAMPLE: ...] if a real one is needed)", bullets: "Turn it into a clear bulleted list" };
+export const editText = (site, keyword, text, action, instruction, before, after) => `You are editing part of a web page for ${site.name || site.url}${site.product ? ` (${site.product})` : ""}. Page topic: "${keyword}".
+${typeLine(site)}${kbOnly(site)}
+TASK: ${instruction ? instruction : EDIT_ACTIONS[action] || EDIT_ACTIONS.rewrite}.
+Text just before (for context, don't change it): "${String(before || "").slice(-300)}"
+TEXT TO EDIT:
+"""
+${text}
+"""
+Text just after (for context, don't change it): "${String(after || "").slice(0, 300)}"
+Rules: keep Markdown formatting (headings, links, lists, citations like [[2]](url)); never invent statistics, quotes, prices or customers; keep the same language.
+Reply with ONLY the edited text, nothing else.`;
+export const changePage = (site, keyword, md, instruction) => `You are editing a web page for ${site.name || site.url}${site.product ? ` (${site.product})` : ""}. Page topic: "${keyword}".
+${typeLine(site)}${kbOnly(site)}
+THE EDITOR'S INSTRUCTION: ${instruction}
+
+THE CURRENT PAGE (Markdown):
+"""
+${String(md).slice(0, 40000)}
+"""
+Rules: change only what the instruction asks for and keep everything else word for word, so the changes are easy to review. Keep the Markdown structure, links and citations like [[2]](url). Never invent statistics, quotes, prices or customers; use placeholders like [ADD DATA: ...] instead. Keep the same language.
+Reply with ONLY the full updated page in Markdown, nothing else.`;

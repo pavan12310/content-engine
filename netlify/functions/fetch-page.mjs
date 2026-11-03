@@ -118,3 +118,5 @@ export default async (req) => {
 };
 
 export const config = { path: "/api/fetch" };
+
+export { safeUrl };   // shared with crawl-batch.mjs

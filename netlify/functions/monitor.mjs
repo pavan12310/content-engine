@@ -213,22 +213,23 @@ async function sendEmail(to, subject, html) {
   } catch (e) { return { error: e.message }; }
 }
 // one hourly run
-export async function runOnce({ now = Date.now(), force = false } = {}) {
+// onlyPrefix/siteIds: "Run the check now" for one team or workspace and chosen websites; sendMail false skips the email
+export async function runOnce({ now = Date.now(), force = false, onlyPrefix = null, siteIds = null, sendMail = true, emails = null, budgetMs = BUDGET_MS } = {}) {
   UPDATES = null;
-  const deadline = now + BUDGET_MS, store = getStore({ name: "content-engine-team", consistency: "strong" }), out = [];
+  const deadline = now + budgetMs, store = getStore({ name: "content-engine-team", consistency: "strong" }), out = [];
   const { blobs } = await store.list();
   // chat alerts held for quiet hours or combining: every team and workspace with chat channels, whether or not monitoring is on
   try { const { blobs: hk } = await NOTIFY.store().list(); for (const k of hk.map(b => b.key).filter(k => /^(w:[^:]+:)?hooks$/.test(k))) await NOTIFY.flush(k.replace(/hooks$/, "")).catch(() => {}); } catch { }
   const scopes = blobs.map(b => b.key).filter(k => /^(w:[^:]+:)?monitor-settings$/.test(k)).map(k => k.replace(/monitor-settings$/, ""));
-  for (const prefix of scopes) {
+  for (const prefix of (onlyPrefix != null ? [onlyPrefix] : scopes)) {
     if (Date.now() > deadline - 4000) break;
-    const settings = await read(store, `${prefix}monitor-settings`); if (!settings || !settings.enabled) continue;
+    const settings = (await read(store, `${prefix}monitor-settings`)) || (onlyPrefix != null ? {} : null); if (!settings || (!settings.enabled && onlyPrefix == null)) continue;
     const sites = (await read(store, `${prefix}sites`)) || [], done = [], skipped = [];
     for (const s of sites) {
       if (Date.now() > deadline - 7000) { skipped.push(s.id); continue; }   // next hour
       const hist = await read(store, `${prefix}monitor:${s.id}`), last = (hist && hist[0] && hist[0].at) || 0;
       if (!force && now - last < WEEK - 3600e3) continue;   // checked within the last week
-      if (Array.isArray(settings.sites) && settings.sites.length && !settings.sites.includes(s.id)) continue;   // not one of the chosen websites (always respected)
+      if (Array.isArray(siteIds) && siteIds.length ? !siteIds.map(Number).includes(s.id) : (Array.isArray(settings.sites) && settings.sites.length && !settings.sites.includes(s.id))) continue;   // not one of the chosen websites (always respected)
       // the chosen day (UTC); if a week was missed (8+ days), run at the next opportunity
       if (!force && settings.day != null && new Date(now).getUTCDay() !== settings.day && last && now - last < 8 * 864e5) continue;
       try { const snap = await checkSite(store, prefix, s, deadline);
@@ -262,9 +263,10 @@ export async function runOnce({ now = Date.now(), force = false } = {}) {
     if (prefix) { try { wsName = (await getStore({ name: "content-engine-auth", consistency: "strong" }).get(`ws:${prefix.split(":")[1]}`, { type: "json" }))?.name || "Your workspace"; } catch { } }
     const needs = done.some(s => s.summary.level !== "ok");
     let email = { skipped: "nothing needs attention (only-changes is on)" };
-    if (!settings.only_changes || needs) {
+    if (!sendMail) email = { skipped: "email not requested" };
+    else if (!settings.only_changes || needs) {
       const worst = done.some(s => s.summary.level === "alert") ? "Needs attention" : needs ? "A few things to check" : "All good";
-      email = await sendEmail(settings.emails || [], `${worst}: weekly check for ${wsName}`, emailHtml(wsName, done, process.env.URL || process.env.APP_URL || ""));
+      email = await sendEmail(emails && emails.length ? emails : settings.emails || [], `${worst}: weekly check for ${wsName}`, emailHtml(wsName, done, process.env.URL || process.env.APP_URL || ""));
     }
     // chat alerts: the weekly summary, and urgent problems as their own alert
     let chat = null;

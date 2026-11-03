@@ -8,6 +8,7 @@ import * as SYNC from "./sync.js";
 import * as AUTH from "./auth.js";
 import * as WS from "./websearch.js";
 import * as CMS from "./cms.js";
+import * as KD from "./kwdata.js";
 import * as GSCC from "./gscconn.js";
 import * as SPEED from "./speed.js";
 import * as INOW from "./indexnow.js";
@@ -101,7 +102,7 @@ async function forYou(){ const me=myName(); if(!SITE_ID||!me) return ""; const f
     ${f.signoffs.map(x=>`<div class="row" style="margin:4px 0"><span class="pill warn">Waiting for your sign-off</span> <b>${esc(x.title)}</b> <span class="status">(${esc(x.step)})</span> <button class="btn ghost small" data-fyopen="${x.cid}">Open</button></div>`).join("")}
     ${f.mentions.map(x=>`<div class="row" style="margin:4px 0"><span class="pill">@ mention</span> <b>${esc(x.by)}</b> on <b>${esc(x.title)}</b>: <span class="status">“${esc(x.text.slice(0,120))}”</span> <button class="btn ghost small" data-fyopen="${x.cid}">Open</button></div>`).join("")}</div>`; }
 // Home, then the "For you" box once Home has finished drawing
-async function loadHome(){ await loadHomeInner(); const FY=await forYou().catch(()=>""), out=$("#home-out");
+async function loadHome(){ await loadHomeInner(); await renderThisWeek().catch(e=>console.warn(e)); const FY=await forYou().catch(()=>""), out=$("#home-out");
   if(FY&&out&&!out.querySelector("[data-fy]")){ out.insertAdjacentHTML("afterbegin",`<div data-fy>${FY}</div>`); out.querySelectorAll("[data-fyopen]").forEach(b=>b.onclick=()=>openItem(+b.dataset.fyopen)); } }
 async function loadHomeInner(){ await loadAnn();
   renderMonitorHome().catch(()=>{});
@@ -393,7 +394,15 @@ function writeFromCheck(kw,intent,pageType){
   if(pageType&&$(`#g-type option[value="${pageType}"]`)) $("#g-type").value=pageType;
   if(CHECK&&CHECK.keyword===kw) $("#g-notes").value=researchNotes(CHECK);
 }
-function renderCheck(){
+function renderCheck(){ renderCheckInner(); bingLine(); }
+// Bing's numbers for the checked keyword, above the rest of the analysis (free, needs the Bing key)
+async function bingLine(){ const box=$("#k-out"); if(!box||!CHECK||!KD.bingReady()) return; const kw=CHECK.keyword||$("#k-kw").value.trim(); if(!kw) return;
+  let el=box.querySelector("[data-kbing]"); if(!el){ el=document.createElement("p"); el.className="status"; el.setAttribute("data-kbing",""); el.style.margin="0 0 10px"; box.prepend(el); }
+  el.textContent="Getting Bing's numbers…";
+  try{ const v=await KD.volume(kw); const m=["","January","February","March","April","May","June","July","August","September","October","November","December"];
+    el.innerHTML=`<b>Demand on Bing (${esc(KD.market().country.toUpperCase())}):</b> ${fmtN(v.monthly)} searches a month <span class="pill ${v.level==="high"?"pass":v.level==="medium"?"":"warn"}">${esc(v.level)}</span>${v.trend!=null?` · trend <span class="${v.trend>=10?"pass":v.trend<=-10?"warn":""}">${v.trend>0?"↑":v.trend<0?"↓":"→"}${Math.abs(v.trend)}%</span> over the last 12 weeks`:""}${v.peak_month?` · busiest in ${m[v.peak_month]}`:""}. <span title="Bing has fewer searches than Google: use these numbers to compare keywords and spot trends.">Compare keywords with these; Google's numbers are higher.</span>`; }
+  catch(e){ el.textContent=`Bing's numbers aren't available: ${e.message}`; } }
+function renderCheckInner(){
   const d=CHECK, v=d.verdict||{}, a=d.analysis||{}, s=d.serp, kw=d.keyword;
   const intent=a.dominant_intent||v.keyword_intent, [cls,title,sub]=ACTION_VIEW[d.action]||ACTION_VIEW.review;
   const pt=(s&&s.searched&&s.recommended_page_type)||"";
@@ -517,12 +526,14 @@ async function checkResume(){
 let RESUME=false;
 function setSteps(n){ document.querySelectorAll("#g-steps li").forEach(li=>{const k=+li.dataset.step;li.className=k<n?"done":k===n?"now":"";}); }
 $("#g-run").onclick=()=>{if(!needSite($("#g-status"),true))return;busy($("#g-run"),$("#g-status"),"Starting… this takes 2–6 minutes. Keep this tab open.",async()=>{
-  const body={keyword:$("#g-kw").value.trim(),intent:$("#g-intent").value,page_type:$("#g-type").value,audience:$("#g-aud").value,notes:$("#g-notes").value,author:$("#g-author").value.trim(),override_duplicate:$("#g-override").checked,verify_claims:$("#g-verify").checked,resume:RESUME}; RESUME=false;
+  const body={keyword:$("#g-kw").value.trim(),intent:$("#g-intent").value,page_type:$("#g-type").value,audience:$("#g-aud").value,notes:$("#g-notes").value,research:$("#g-research").checked,source_urls:$("#g-sources").value.split(/\s+/).filter(Boolean),research_exclude:SRC_EXCLUDE.kw===$("#g-kw").value.trim()?[...SRC_EXCLUDE.urls]:[],author:$("#g-author").value.trim(),override_duplicate:$("#g-override").checked,verify_claims:$("#g-verify").checked,resume:RESUME}; RESUME=false;
   if(!body.keyword) throw new Error("Enter a keyword.");
   setSteps(0); $("#g-steps").classList.remove("hidden"); $("#g-out").innerHTML="";   // don't leave the previous page on screen while a new one is written
   try{
-    const d=await api(`/api/sites/${SITE_ID}/generate`,{method:"POST",body:JSON.stringify(body),onProgress:m=>{$("#g-status").dataset.progress="1";$("#g-status").textContent=m+" Keep this tab open.";const n=(m.match(/\((\d)\/4\)/)||[])[1];if(n)setSteps(+n);}});
+    $("#g-live").classList.add("hidden"); $("#g-live-body").innerHTML="";
+    const d=await api(`/api/sites/${SITE_ID}/generate`,{method:"POST",body:JSON.stringify(body),onDraft:liveDraft,onProgress:m=>{$("#g-status").dataset.progress="1";$("#g-status").textContent=m+" Keep this tab open.";const n=(m.match(/\((\d)\/4\)/)||[])[1];if(n)setSteps(+n);}});
     setSteps(5); $("#g-resume").classList.add("hidden");
+    $("#g-live").classList.add("hidden");
     const item=await api(`/api/contents/${d.id}`); renderItem(item,$("#g-out")); loadAuthors();
     if(item.status==="ready_for_human_review") chatEvent("approval",`Ready for review: ${item.title||item.keyword}`,[`Keyword: ${item.keyword}`,`Written for ${CURRENT_SITE?.name||window._siteUrl||"your website"}. Open My pages to review and approve it.`]);
   } finally { setTimeout(()=>$("#g-steps").classList.add("hidden"),1200); }
@@ -581,17 +592,26 @@ function renderContent(c,r,el,id,item=null,openTab=null){
      <div class="block"><h3>Helpful-content scorecard</h3><div class="tw"><table><tr><th>#</th><th>Question</th><th>Score</th><th>Why</th></tr>${(((ev.content_quality||{}).scorecard)||(r.quality_review||{}).scores||[]).map((x,i)=>`<tr><td>${i+1}</td><td>${esc((RULES&&RULES.scorecard[i])||"")}</td><td>${x.score}/2</td><td>${esc(x.reason)}</td></tr>`).join("")}</table></div></div></div>
    <div data-p="${T("Markdown")}" class="hidden"><pre>${esc(c.body_markdown)}</pre></div>
    <div data-p="${T("Schema")}" class="hidden"><pre>${esc(JSON.stringify(c.schema_jsonld,null,2))}</pre></div>
-   <div class="row" style="margin-top:14px"><span class="status">Export:</span>${id?`<button class="btn ghost small" data-export="${id}">Markdown file</button><button class="btn ghost small" data-export-html="${id}">HTML file</button>`:""}<button class="btn ghost small" data-copy>Copy HTML (for a CMS)</button><button class="btn ghost small" data-copy-rich>Copy for Google Docs / Word</button><span class="status" data-copy-status></span></div>
-   ${item&&item.refresh?`<div data-refresh-panel></div>`:""}${item?`<div data-review-panel></div>`:""}${item?approvePanel(item):""}${item?`<div data-brief-line></div><div data-ga4-line></div><div data-lang-panel></div><div data-repurpose-panel></div><div data-wiki-panel></div>`:""}
+   <div class="row" style="margin-top:14px"><span class="status">Export:</span>${id?`<button class="btn ghost small" data-export="${id}">Markdown file</button><button class="btn ghost small" data-export-html="${id}">HTML file</button>`:""}<button class="btn ghost small" data-copy>Copy HTML (for a CMS)</button><button class="btn ghost small" data-copy-rich>Copy for Google Docs / Word</button><button class="btn ghost small" data-doc title="Opens in Word; upload it to Google Drive to open it as a Google Doc">Word file</button><span class="status" data-copy-status></span></div>
+   ${item&&item.refresh?`<div data-refresh-panel></div>`:""}${item?`<div data-review-panel></div>`:""}${item?approvePanel(item):""}${item?`<div data-sources-line></div><div data-brief-line></div><div data-ga4-line></div><div data-lang-panel></div><div data-repurpose-panel></div><div data-wiki-panel></div>`:""}
   </div>`;
   el.querySelectorAll(".tabs2 button").forEach(b=>b.onclick=()=>{el.querySelectorAll(".tabs2 button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));el.querySelectorAll("[data-p]").forEach(p=>p.classList.toggle("hidden",p.dataset.p!==b.dataset.t));});
   const ex=el.querySelector("[data-export]"); if(ex) ex.onclick=()=>api(`/api/contents/${ex.dataset.export}/export.md`);
   const cs=el.querySelector("[data-copy-status]"), done=m=>{cs.textContent=m;setTimeout(()=>cs.textContent="",3000);};
   el.querySelector("[data-copy]").onclick=async()=>{try{await navigator.clipboard.writeText((c.html||"")+`\n<script type="application/ld+json">${JSON.stringify(c.schema_jsonld)}<\/script>`);done("Copied HTML with schema.");}catch{done("Your browser blocked copying.");}};
   el.querySelector("[data-copy-rich]").onclick=async()=>{try{const html=sanitize(c.html||"");
-    await navigator.clipboard.write([new ClipboardItem({"text/html":new Blob([html],{type:"text/html"}),"text/plain":new Blob([c.body_markdown||""],{type:"text/plain"})})]);done("Copied. Paste into Google Docs or Word: headings and links are kept.");}catch{done("Your browser blocked rich copying. Use the HTML file instead.");}};
+    await navigator.clipboard.write([new ClipboardItem({"text/html":new Blob([html],{type:"text/html"}),"text/plain":new Blob([c.body_markdown||""],{type:"text/plain"})})]);cs.innerHTML=`Copied. Paste into Google Docs or Word: headings, lists, tables and links are kept. <a href="https://docs.new" target="_blank" rel="noopener">Open a new Google Doc</a>`;}catch{done("Your browser blocked rich copying. Use the HTML file instead.");}};
+  // a Word file (Word opens it directly; Google Drive converts it to a Google Doc), with the title and description on top
+  const dw=el.querySelector("[data-doc]"); if(dw) dw.onclick=()=>{ const title=c.title_tag||c.h1||"Page", html=sanitize(c.html||"");
+    const doc=`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>${esc(title)}</title>
+<style>body{font-family:Calibri,Arial,sans-serif;font-size:11pt;line-height:1.4}h1{font-size:20pt}h2{font-size:15pt}h3{font-size:12.5pt}table{border-collapse:collapse}td,th{border:1px solid #999;padding:4px 6px}.meta{color:#555;font-size:9.5pt}</style></head>
+<body><p class="meta">SEO title: ${esc(c.title_tag||"")}<br>Meta description: ${esc(c.meta_description||"")}<br>URL slug: ${esc(c.slug||"")}</p>${html}</body></html>`;
+    const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["\ufeff",doc],{type:"application/msword"})); a.download=`${(c.slug||"page").replace(/[^a-z0-9-]+/gi,"-")}.doc`; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1000);
+    done("Downloaded. Open it in Word, or upload it to Google Drive and open it with Google Docs."); };
   const exh=el.querySelector("[data-export-html]"); if(exh) exh.onclick=()=>api(`/api/contents/${exh.dataset.exportHtml}/export.html`);
   if(item){ bindEdit(item,el); bindApprove(item,el); renderLangPanel(item,el).catch(()=>{}); renderRepurpose(item,el); renderWikiCheck(item,el); if(item.refresh) renderRefresh(item,el); renderCollab(item,el).catch(e=>console.warn(e));
+    { const box=el.querySelector("[data-sources-line]"), R=item.research; if(box&&R&&(R.sources||[]).length){ const used=new Set(R.used||[]);
+      box.innerHTML=`<details style="margin:8px 0" ${used.size?"":"open"}><summary class="status"><b>Sources read before writing</b> (${R.sources.length}, ${used.size} cited in the page)</summary><ol style="margin:6px 0 0 18px;padding:0">${R.sources.map(x=>`<li style="margin:2px 0"><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a> <span class="status">· ${esc(x.via)} · ${fmtN(x.words)} words</span> ${used.has(x.n)?`<span class="pill pass">cited</span>`:""}</li>`).join("")}</ol>${(R.notes||[]).length?`<p class="status" style="margin:4px 0">${R.notes.map(esc).join(" ")}</p>`:""}${(R.log||[]).length?`<details style="margin-top:6px"><summary class="status">Research log (${R.log.length} steps)</summary><ol class="status" style="margin:4px 0 0 18px;padding:0">${R.log.map(l=>`<li>${esc(l)}</li>`).join("")}</ol></details>`:""}</details>`; } }
     api(`/api/sites/${SITE_ID}/contents/${item.id}/brief-coverage`).then(c=>{ const box=el.querySelector("[data-brief-line]"); if(!c||!box) return; const sc=c.sections.filter(x=>x.covered).length, qc=c.questions.filter(x=>x.covered).length, miss=[...c.sections.filter(x=>!x.covered).map(x=>x.h2),...c.questions.filter(x=>!x.covered).map(x=>x.q)];
       box.innerHTML=`<div class="verdict ${miss.length?"related":"create"}" style="margin:8px 0">Brief coverage: <b>${sc} of ${c.sections.length}</b> outline sections and <b>${qc} of ${c.questions.length}</b> questions.${miss.length?` Missing: ${miss.slice(0,6).map(m=>`“${esc(m)}”`).join(", ")}${miss.length>6?"…":""}`:" Everything in the brief is covered."}</div>`; }).catch(()=>{});
     GA4.report(SITE_ID).then(d=>{ const st=GA4.pageStats(d,item.url||item.published?.link), box=el.querySelector("[data-ga4-line]"); if(!st||!box) return; const c=GA4.change(st.conversions,st.prev_conversions);
@@ -613,8 +633,13 @@ function editPanel(item){
      <div class="field"><label>URL slug</label><input data-e="slug" value="${esc(x.slug||"")}"></div>
    </div>
    <div class="edit-grid">
-     <div><textarea class="md-edit" data-e="markdown" spellcheck="true" aria-label="Page content (Markdown)">${esc(x.body_markdown||"")}</textarea>
+     <div>${READONLY?"":`<div class="row" role="toolbar" aria-label="AI editing" style="gap:6px;margin-bottom:6px;flex-wrap:wrap"><b style="font-size:13px">AI</b>
+         <select data-aiact aria-label="What to do with the selected text" style="width:auto"><option value="rewrite">Rewrite</option><option value="shorten">Shorten</option><option value="expand">Expand</option><option value="simplify">Simplify</option><option value="grammar">Fix grammar</option><option value="friendlier">Friendlier tone</option><option value="professional">More professional</option><option value="example">Add an example</option><option value="bullets">Make a bulleted list</option></select>
+         <input data-aiins placeholder="or describe it: e.g. mention the free trial" aria-label="Your own instruction for the selected text" style="flex:1;min-width:160px">
+         <button class="btn small" data-airun>Apply to selected text</button><button class="btn ghost small" data-aiundo hidden>Undo</button><span class="status" data-aist role="status"></span></div>`}
+       <textarea class="md-edit" data-e="markdown" spellcheck="true" aria-label="Page content (Markdown)">${esc(x.body_markdown||"")}</textarea>
        <div class="row" style="margin-top:10px"><button class="btn" data-save>Save changes</button><button class="btn ghost" data-review>Re-review with AI</button></div>
+       ${READONLY?"":`<div class="row" style="margin-top:10px;gap:6px"><input data-chg placeholder="Change the whole page with AI: e.g. make the intro shorter and add a comparison table" aria-label="Instruction for the whole page" style="flex:1;min-width:220px"><button class="btn ghost small" data-chgrun>Change with AI</button></div><span class="status" data-chgst role="status"></span><div class="preview hidden" data-chglive style="max-height:360px;overflow:auto;margin-top:8px"></div>`}
        <p class="status" data-live style="margin:8px 0 0"></p><span class="status" data-estatus role="status"></span></div>
      <div class="preview" data-live-preview>${hl(x.html||"")}</div>
    </div>
@@ -630,6 +655,19 @@ function editPanel(item){
 }
 function bindEdit(item,el){
   const md=el.querySelector('[data-e="markdown"]'); if(!md) return;
+  // AI on the selected text (replaces the selection; Undo restores it; Save keeps a version as usual)
+  { const run=el.querySelector("[data-airun]"), undo=el.querySelector("[data-aiundo]"), st=el.querySelector("[data-aist]"); let prev=null;
+    if(run) run.onclick=()=>{ const a=md.selectionStart, z=md.selectionEnd, text=md.value.slice(a,z); if(!text.trim()){ st.textContent="Select some text in the editor first."; md.focus(); return; } if(!needAI(st)) return;
+      busy(run,st,"Editing…",async()=>{ const r=await api(`/api/sites/${SITE_ID}/ai-edit`,{method:"POST",body:JSON.stringify({keyword:item.keyword,text,action:el.querySelector("[data-aiact]").value,instruction:el.querySelector("[data-aiins]").value.trim(),before:md.value.slice(Math.max(0,a-400),a),after:md.value.slice(z,z+400)})});
+        prev={value:md.value,a,z}; md.value=md.value.slice(0,a)+r.text+md.value.slice(z); md.setSelectionRange(a,a+r.text.length); md.focus(); md.dispatchEvent(new Event("input",{bubbles:true}));
+        undo.hidden=false; st.textContent="Done. Check it, then Save changes (or Undo)."; }); };
+    if(undo) undo.onclick=()=>{ if(!prev) return; md.value=prev.value; md.setSelectionRange(prev.a,prev.z); md.focus(); md.dispatchEvent(new Event("input",{bubbles:true})); prev=null; undo.hidden=true; st.textContent="Undone."; }; }
+  // the whole page by instruction: the result opens as tracked changes to accept or reject
+  { const b=el.querySelector("[data-chgrun]"), st=el.querySelector("[data-chgst]");
+    if(b) b.onclick=()=>{ const ins=el.querySelector("[data-chg]").value.trim(); if(!ins){ st.textContent="Type what to change."; return; } if(!needAI(st)) return;
+      if(md.value!==(item.payload.body_markdown||"")){ st.textContent="Save your edits first, so the AI works on the latest version."; return; }
+      const lv=el.querySelector("[data-chglive]");
+      busy(b,st,"Changing the page…",async()=>{ const r=await api(`/api/sites/${SITE_ID}/contents/${item.id}/ai-change`,{method:"POST",body:JSON.stringify({instruction:ins}),onDraft:t=>{ if(!lv) return; lv.classList.remove("hidden"); lv.innerHTML=mdToHtmlSafe(t)+'<span class="live-cursor" aria-hidden="true"></span>'; lv.scrollTop=lv.scrollHeight; }}).finally(()=>{ if(lv){ lv.classList.add("hidden"); lv.innerHTML=""; } }); await openItem(item.id); toast(`${r.changes} change${r.changes===1?"":"s"} to review: accept or reject each one.`); }); }; }
   const get=n=>el.querySelector(`[data-e="${n}"]`).value, st=el.querySelector("[data-estatus]"), live=el.querySelector("[data-live]");
   const cnt=()=>{ const t=get("title_tag").length, m=get("meta_description").length;
     const ct=el.querySelector('[data-cnt="title_tag"]'), cm=el.querySelector('[data-cnt="meta_description"]');
@@ -662,8 +700,8 @@ function bindEdit(item,el){
 function approvePanel(item){
   if(item.status==="approved"){ const pub=item.published, ok=SITE_ID&&CMS.configured(SITE_ID);
     return `<div class="approve-box"><b class="pass">Approved by ${esc(item.approved.by)} on ${esc(fmtDate(item.approved.at))}.</b> <span class="status">Editing the page again sends it back to review.</span>
-    <div class="row" style="margin-top:10px">${ok?`<button class="btn small" data-wp-send>${pub?"Update in WordPress":"Send to WordPress as a draft"}</button>`:`<button class="btn ghost small" data-go="site">Connect WordPress to publish from here</button>`}
-      ${pub?`<span class="status">In WordPress (${esc(pub.status)}) since ${esc(fmtDate(pub.at))} · <a href="${esc(pub.edit_link)}" target="_blank" rel="noopener">Open in the WordPress editor</a> · <a href="${esc(pub.link)}" target="_blank" rel="noopener">Preview</a></span>`:""}
+    <div class="row" style="margin-top:10px">${ok?`<button class="btn small" data-wp-send>${sendLabel(pub)}</button>`:`<button class="btn ghost small" data-go="site">Connect WordPress or Framer to publish from here</button>`}
+      ${pub&&["webflow","hubspot"].includes(pub.platform)?`<span class="status">In ${esc(CMS.NAMES[pub.platform])} (${esc(pub.collection||"")}${pub.collection?", ":""}${esc(pub.status)}) since ${esc(fmtDate(pub.at))}${pub.link||pub.page_url?` · <a href="${esc(pub.link||pub.page_url)}" target="_blank" rel="noopener">${pub.status==="live"?"View the live page":"Where it will be"}</a>`:""}</span>`:pub&&pub.platform==="framer"?`<span class="status">In Framer CMS (${esc(pub.collection||"collection")}, ${esc(pub.status)}) since ${esc(fmtDate(pub.at))} · <a href="${esc(pub.edit_link)}" target="_blank" rel="noopener">Open the Framer project</a>${pub.link?` · <a href="${esc(pub.link)}" target="_blank" rel="noopener">${pub.status==="live"?"View the live site":"View the preview"}</a>`:""}</span>`:pub?`<span class="status">In WordPress (${esc(pub.status)}) since ${esc(fmtDate(pub.at))} · <a href="${esc(pub.edit_link)}" target="_blank" rel="noopener">Open in the WordPress editor</a> · <a href="${esc(pub.link)}" target="_blank" rel="noopener">Preview</a></span>`:""}
       <span class="status" data-wp-status role="status"></span></div>
     ${(item.url||pub?.link)&&!READONLY?`<div class="row" style="margin-top:8px"><button class="btn ghost small" data-inow>Notify search engines (IndexNow)</button><span class="status" data-inow-st role="status"></span></div>`:""}</div>`; }
   const ph=(item.report.validation||{}).placeholders||0;
@@ -682,11 +720,17 @@ function bindApprove(item,el){
     if(!v.verified?.ok) throw new Error("Set up and verify IndexNow first (Websites → Instant indexing).");
     const r=await INOW.submit(SITE_ID,window._siteUrl||"",[item.url||item.published.link]); const st=el.querySelector("[data-inow-st]"); if(st){ st.className=r.accepted?"status pass":"status err"; st.textContent=r.message; } });
   const wp=el.querySelector("[data-wp-send]");
-  if(wp) wp.onclick=()=>busy(wp,el.querySelector("[data-wp-status]"),item.published?"Updating in WordPress…":"Sending to WordPress…",async()=>{
+  if(wp) wp.onclick=()=>busy(wp,el.querySelector("[data-wp-status]"),`${item.published?"Updating":"Sending"} in ${CMS.platformName(SITE_ID)}…`,async()=>{
+    { const c=CMS.settings(SITE_ID), live=c.platform==="framer"?c.mode==="live":c.platform==="webflow"?c.wf_mode==="live":c.platform==="hubspot"?c.hs_mode==="live":false;
+      if(live&&!confirm(c.platform==="framer"?"This publishes your Framer site live, including any other unpublished changes in the project. Continue?":`This publishes the page live on your ${CMS.NAMES[c.platform]} site. Continue?`)) throw new Error("Cancelled."); }
     if(READONLY) throw new Error("Your role is view-only.");
     const r=await CMS.send(SITE_ID,item); const who=AUTH.state().user?.email||"";
-    item.published=await api(`/api/sites/${SITE_ID}/contents/${item.id}/published`,{method:"POST",body:JSON.stringify({...r,platform:"wordpress",by:who})});
-    renderItem(item,el); const st=el.querySelector("[data-wp-status]"); if(st) st.textContent=r.recreated?"The earlier post had been deleted in WordPress, so a new draft was created.":r.updated?"Updated in WordPress.":"Sent. It's a draft in WordPress: review it there and press Publish."; });
+    const fr=["framer","webflow","hubspot"].includes(r.platform), nm=CMS.NAMES[r.platform]||"WordPress";
+    item.published=await api(`/api/sites/${SITE_ID}/contents/${item.id}/published`,{method:"POST",body:JSON.stringify({...r,platform:r.platform||"wordpress",by:who})});
+    renderItem(item,el); const st=el.querySelector("[data-wp-status]");
+    if(r.page_url&&!item.url){ try{ await api(`/api/sites/${SITE_ID}/contents/${item.id}/url`,{method:"POST",body:JSON.stringify({url:r.page_url})}); }catch{} }
+    if(st) st.textContent=fr?`${r.updated?"Updated":"Added"} in ${nm}${r.platform==="framer"?" CMS":""}${r.collection?` (${r.collection})`:""}. ${r.publish_error?r.publish_error:r.status==="live"?`Published live${r.page_url?` at ${r.page_url}`:r.live?.length?` on ${r.live.join(", ")}`:""}.`:r.status==="preview published"?"A preview was published: check it, then publish from Framer.":`It's a draft: review it in ${nm} and publish from there.`}`
+      :r.recreated?"The earlier post had been deleted in WordPress, so a new draft was created.":r.updated?"Updated in WordPress.":"Sent. It's a draft in WordPress: review it there and press Publish."; });
   bindGo(el);
   const b=el.querySelector("[data-approve]"); if(!b) return; const st=el.querySelector("[data-astatus]");
   b.onclick=()=>busy(b,st,"Checking…",async()=>{ if(DIRTY) throw new Error("Save your edits first.");
@@ -851,8 +895,8 @@ async function goAction(a){
   if(L.view==="generate") return prefillWrite(L.keyword,L.intent);
   if(L.view==="competitors"){ show("competitors"); return; }
   if(L.view==="migration"){ show("migration"); return; }
-  if(L.view==="gsc"&&L.section==="decay"){ show("gsc"); const el=await waitFor(()=>$("#decay-panel h2")); if(el) el.scrollIntoView({behavior:"smooth",block:"start"}); return; }
-  if(L.view==="gsc"&&L.section==="bing"){ show("gsc"); const el=await waitFor(()=>$("#bing-panel h2")); if(el) el.scrollIntoView({behavior:"smooth",block:"start"}); return; }
+  if(L.view==="gsc"&&L.section==="decay"){ GS_TAB="decay"; show("gsc"); const el=await waitFor(()=>$("#decay-panel h2")); if(el) el.scrollIntoView({behavior:"smooth",block:"start"}); return; }
+  if(L.view==="gsc"&&L.section==="bing"){ GS_TAB="bing"; show("gsc"); const el=await waitFor(()=>$("#bing-panel h2")); if(el) el.scrollIntoView({behavior:"smooth",block:"start"}); return; }
   if(L.view==="gsc"){ GSC_TAB=L.tab||"quick"; GS_TAB=L.section||(L.tab?"searches":"overview"); show("gsc"); const el=await waitFor(()=>$("#gsc-tabs")); if(el) el.scrollIntoView({behavior:"smooth",block:"start"}); return; }
   if(L.view==="urlmap"){ show("urlmap"); kwTab(L.tab||"list"); return; }
   if(L.view==="aivis"){ VIS=null; show("aivis"); await waitFor(()=>VIS);
@@ -872,8 +916,8 @@ $("#ac-run").onclick=()=>{if(!needSite($("#ac-status")))return;busy($("#ac-run")
 let TA=null, TA_TAB="issues", TA_PAGE=null;
 // Site health: six main tabs, some with sub-tabs; each shows its problem count
 const TA_GROUPS=[["problems","Problems"],["pages","Pages"],["speed","Speed"],["indexing","Indexing"],["links","Links"],["content","Content"]];
-const TA_SUBS=[["issues","problems","Issues"],["ignored","problems","Ignored"],["pages","pages","Pages"],["speed","speed","Speed"],["index","indexing","In Google"],["sitemaps","indexing","Sitemaps &amp; robots.txt"],
-  ["links","links","Internal links"],["ext","links","External links"],["dupes","content","Duplicates"],["schema","content","Structured data"],["images","content","Images"]];
+const TA_SUBS=[["issues","problems","Issues"],["ignored","problems","Ignored"],["pages","pages","Pages"],["full","pages","Whole site"],["speed","speed","Speed"],["index","indexing","In Google"],["sitemaps","indexing","Sitemaps &amp; robots.txt"],
+  ["links","links","Internal links"],["ext","links","External links"],["backlinks","links","Backlinks"],["dupes","content","Duplicates"],["schema","content","Structured data"],["images","content","Images"]];
 const TA_GROUP_OF=Object.fromEntries(TA_SUBS.map(([t,g])=>[t,g])), TA_LAST={};
 const countLabel=v=>v==null?`<span class="status" style="font-weight:400">not checked</span>`:v==="partial"?`<span class="status" style="font-weight:400" title="Only part of the site was read">read more pages</span>`:v==="some"?`<span class="status" style="font-weight:400">some not checked</span>`:v?`<b class="warn">${v}</b>`:`<span class="pass">✓</span>`;
 let TA_CT=null; const taCountsSoon=()=>{ clearTimeout(TA_CT); TA_CT=setTimeout(()=>{ const o=$("#ta-out"); if(o&&o.querySelector("#ta-main")) taCounts(o); },400); };
@@ -913,6 +957,8 @@ function renderAudit(){
      <div data-tp="images"><div id="ta-images"><p class="status">Loading…</p></div></div>
      <div data-tp="sitemaps"><div id="ta-sitemaps"><p class="status">Loading…</p></div></div>
      <div data-tp="ext"><div id="ta-ext"><p class="status">Loading…</p></div></div>
+     <div data-tp="backlinks"><div id="ta-bl"><p class="status">Loading…</p></div></div>
+     <div data-tp="full"><div id="ta-full"><p class="status">Loading…</p></div></div>
      <div data-tp="ignored">${(d.ignored||[]).length?`<p class="status">Ignored issues don't count towards your score or to-do list.</p><div class="tw"><table><tr><th>Issue</th><th>Page</th><th>Reason</th><th><span class="sr-only">Actions</span></th></tr>${d.ignored.map(x=>`<tr><td>${esc((CHECK_LABELS[x.check]||x.check))}</td><td class="url">${esc(x.url)}</td><td>${esc(x.reason||"")}</td><td><button class="btn ghost small" data-unig='${esc(JSON.stringify({check:x.check,url:x.url}))}'>Restore</button></td></tr>`).join("")}</table></div>`:emptyBox("Nothing ignored","Use Ignore on an issue that's intentional, like a login page that's hidden from Google on purpose.")}</div>
    </div>`;
   const out=$("#ta-out");
@@ -923,7 +969,7 @@ function renderAudit(){
     out.querySelectorAll("[data-tt]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.tt===t)));out.querySelectorAll("[data-tp]").forEach(p=>p.classList.toggle("hidden",p.dataset.tp!==t));};
   out.querySelectorAll("[data-tt]").forEach(b=>b.onclick=()=>tab(b.dataset.tt));
   out.querySelectorAll("[data-tm]").forEach(b=>b.onclick=()=>tab(TA_LAST[b.dataset.tm]||TA_SUBS.find(x=>x[1]===b.dataset.tm)[0])); tab(TA_TAB); taCounts(out);
-  renderSpeed().catch(()=>{}); renderIndex().catch(()=>{}); renderLinks().catch(()=>{}); renderSchema().catch(()=>{}); renderDupes().catch(()=>{}); renderImages().catch(()=>{}); renderSitemaps().catch(()=>{}); renderExt().catch(()=>{});
+  renderSpeed().catch(()=>{}); renderIndex().catch(()=>{}); renderLinks().catch(()=>{}); renderBacklinks().catch(()=>{}); renderFull().catch(()=>{}); renderSchema().catch(()=>{}); renderDupes().catch(()=>{}); renderImages().catch(()=>{}); renderSitemaps().catch(()=>{}); renderExt().catch(()=>{});
   out.querySelectorAll("[data-ig]").forEach(b=>b.onclick=async()=>{ const o=JSON.parse(b.dataset.ig); const reason=b.closest("tr").querySelector("[data-igr]")?.value||""; await api(`/api/sites/${SITE_ID}/technical-audit/ignore`,{method:"POST",body:JSON.stringify({...o,reason})}); await runAudit(); });
   out.querySelectorAll("[data-unig]").forEach(b=>b.onclick=async()=>{ await api(`/api/sites/${SITE_ID}/technical-audit/unignore`,{method:"POST",body:b.dataset.unig}); await runAudit(); });
   out.querySelectorAll("[data-open-page]").forEach(b=>b.onclick=()=>{tab("pages");openPage(b.dataset.openPage);});
@@ -1217,7 +1263,7 @@ function renderKw(arg){
      <td class="kw-cell"><b>${esc(k.keyword)}</b><div class="row-links"><button class="linkbtn" data-kcheck>Check</button><button class="linkbtn" data-kcal>Add to calendar</button><button class="linkbtn" data-kbrief>Brief</button>${(k.coverage||{}).status!=="covered"?`<button class="linkbtn" data-kwrite>Write a page</button>`:""}</div>${(k.source&&!["added","manual"].includes(k.source))||k.gsc_impressions!=null?`<br><span class="status">${esc(["added","manual"].includes(k.source)?"":k.source||"")}${k.gsc_impressions!=null?`${k.source&&!["added","manual"].includes(k.source)?" · ":""}${fmtN(k.gsc_impressions)} impressions, pos ${k.gsc_position}`:""}</span>`:""}</td>
      <td class="cov-cell">${covPill(k.coverage)}${k.coverage&&k.coverage.url?`<a class="url trunc" href="${esc(k.coverage.url)}" target="_blank" rel="noopener" title="${esc(k.coverage.url)}">${esc(k.coverage.url.replace(/^https?:\/\/(www\.)?[^/]+/,"")||"/")}</a>`:""}</td>
      <td><b>${k.opportunity}</b></td>
-     <td><input class="inline-edit num-in" type="number" data-f="volume" value="${k.volume??""}" placeholder="–" aria-label="Volume"></td>
+     <td><input class="inline-edit num-in" type="number" data-f="volume" value="${k.volume??""}" placeholder="–" aria-label="Volume">${k.volume_source==="bing"?`<div class="status nowrap" style="font-size:11.5px" title="Monthly searches on Bing (${esc(KD.market().country.toUpperCase())}). Bing has fewer searches than Google, so compare keywords with each other.">Bing${k.trend!=null?` · <span class="${k.trend>=10?"pass":k.trend<=-10?"warn":""}">${k.trend>0?"↑":k.trend<0?"↓":"→"}${Math.abs(k.trend)}%</span>`:""}</div>`:""}</td>
      <td><input class="inline-edit num-in" type="number" data-f="difficulty" value="${k.difficulty??""}" min="0" max="100" placeholder="–" aria-label="Difficulty"></td>
      <td><input class="inline-edit num-in sm" type="number" data-f="business_value" value="${k.business_value??3}" min="1" max="5" aria-label="Business value"></td>
      <td class="nowrap">${esc(INTENT_LABEL[k.intent]||k.intent||"")}${k.intent_guessed?'<br><span class="status">guessed</span>':""}</td>
@@ -1455,7 +1501,14 @@ function collectSettings(){
   st.webSearch=$("#set-web").checked; st.remember=$("#set-remember").checked; return st;
 }
 $("#set-show").onclick=()=>{const k=$("#set-key");k.type=k.type==="password"?"text":"password";$("#set-show").textContent=k.type==="password"?"Show":"Hide";};
-$("#set-save").onclick=()=>{ LLM.saveSettings(collectSettings()); updatePill(); setStatus().catch(()=>{}); renderSettings(); renderHybrid(); $("#set-status").textContent="Saved."; };
+$("#set-save").onclick=async()=>{ LLM.saveSettings(collectSettings()); updatePill(); setStatus().catch(()=>{}); renderSettings(); renderHybrid(); $("#set-status").textContent="Saved.";
+  // ChatGPT: accounts get different models; if the chosen one isn't on this account, switch to the best one that is
+  const st=LLM.getSettings(); if(st.provider!=="openai"||!st.keys?.openai) return;
+  try{ const ids=await LLM.listModels("openai",st.keys.openai), cur=LLM.activeModel(st);
+    if(ids.length&&!ids.includes(cur)){ const pick=["gpt-5.5","gpt-5","gpt-5-mini","gpt-4.1","gpt-4o","gpt-4.1-mini","gpt-4o-mini"].find(x=>ids.includes(x))||ids[0];
+      LLM.saveSettings({...st,models:{...(st.models||{}),openai:pick}}); updatePill(); renderSettings();
+      $("#set-status").textContent=`Saved. “${cur}” isn't available on your OpenAI account, so it now uses “${pick}”. You can choose another with Load models.`; } }
+  catch(e){ $("#set-status").textContent=`Saved, but OpenAI didn't accept the key: ${e.message}`; } };
 $("#local-model").onchange=()=>{ $("#local-status").textContent=""; LLM.localModelCached($("#local-model").value).then(c=>{ if(c) $("#local-status").textContent="Already downloaded: starting takes about a minute."; }); };
 window.addEventListener("local-ai-progress",e=>{ const bar=$("#local-bar"); if(!bar) return; bar.classList.remove("hidden"); bar.querySelector("i").style.width=Math.round((e.detail.progress||0)*100)+"%"; $("#local-status").textContent=(e.detail.text||"").replace(/\[.*?\]\s*/,"").slice(0,140); });
 $("#local-load").onclick=()=>busy($("#local-load"),$("#local-status"),"Preparing…",async()=>{
@@ -2125,13 +2178,13 @@ function refreshFrom(url,btn,st){ busy(btn,st,"Reading the page and writing the 
 function renderRefresh(item,el){
   const box=el.querySelector("[data-refresh-panel]"); if(!box) return; const R=item.refresh;
   if(R.applied){ const n=TD.changes(TD.diff(R.original.markdown,R.updated)), acc=n.filter(c=>(R.decisions||{})[c.id]!=="reject").length;
-    box.innerHTML=`<div class="verdict create" style="margin:8px 0">Refresh of <span class="url">${esc(R.source_url)}</span>: ${acc} of ${n.length} changes accepted on ${esc(fmtDate(R.applied_at))}. The original is kept in Version history.</div>`; return; }
+    box.innerHTML=`<div class="verdict create" style="margin:8px 0">${R.kind==="instruction"?`AI change “${esc(R.instruction)}”`:`Refresh of <span class="url">${esc(R.source_url)}</span>`}: ${acc} of ${n.length} changes accepted on ${esc(fmtDate(R.applied_at))}. The original is kept in Version history.</div>`; return; }
   const seq=TD.diff(R.original.markdown,R.updated), ch=TD.changes(seq), dec={}, edits={}; let titleD="accept", metaD="accept", editing=null;
   const md=t=>esc(t).replace(/^(#{1,6}) /,"$1 ");
   const show=c=>{ if(c.del.length===1&&c.ins.length===1&&!/^#/.test(c.del[0])) return `<p style="margin:4px 0">${TD.words(c.del[0],c.ins[0]).map(([op,t])=>op==="="?esc(t):op==="-"?`<del style="background:#fde2e1;color:#9b1c1c">${esc(t)}</del>`:`<ins style="background:#dcfce7;color:#14532d;text-decoration:none">${esc(t)}</ins>`).join("")}</p>`;
     return `${c.del.map(x=>`<p style="margin:4px 0"><del style="background:#fde2e1;color:#9b1c1c">${md(x)}</del></p>`).join("")}${c.ins.map(x=>`<p style="margin:4px 0"><ins style="background:#dcfce7;color:#14532d;text-decoration:none">${md(x)}</ins></p>`).join("")}`; };
   const tchg=R.original.title_tag!==item.payload.title_tag, mchg=R.original.meta_description!==item.payload.meta_description;
-  const draw=()=>{ box.innerHTML=`<div class="approve-box"><h3 style="font-size:16px;margin-top:0">Review the changes <span class="status" style="font-weight:400">(refresh of <span class="url">${esc(R.source_url.replace(/^https?:\/\/[^/]+/,"")||"/")}</span>${R.decline?`, which lost ${R.decline}% of its Google clicks`:""})</span></h3>
+  const draw=()=>{ box.innerHTML=`<div class="approve-box"><h3 style="font-size:16px;margin-top:0">Review the changes <span class="status" style="font-weight:400">${R.kind==="instruction"?`(your instruction: “${esc(R.instruction)}”)`:`(refresh of <span class="url">${esc(R.source_url.replace(/^https?:\/\/[^/]+/,"")||"/")}</span>${R.decline?`, which lost ${R.decline}% of its Google clicks`:""})`}</span></h3>
     ${R.compare?`<div class="panel" style="margin:0 0 8px;padding:10px 12px"><b>Before → after:</b> ${fmtN(R.compare.words_before)} → ${fmtN(R.compare.words_after)} words${R.compare.lost.length?` · lost searches covered: <b>${R.compare.lost.filter(x=>x.before).length} → ${R.compare.lost.filter(x=>x.after).length}</b> of ${R.compare.lost.length}
       <div style="margin-top:6px">${R.compare.lost.map(x=>`<span class="pill ${x.after?"pass":"warn"}" title="${x.before?"already covered":"not covered before"}">${esc(x.query)} ${x.before?"✓":"✗"}→${x.after?"✓":"✗"}</span>`).join(" ")}</div>`:""}</div>`:""}
     ${(R.changes_ai||[]).length?`<p class="status" style="margin:0 0 8px">What the AI changed and why: ${R.changes_ai.map(c=>`<b>${esc(c.what)}</b> (${esc(c.why)})`).join("; ")}.</p>`:""}
@@ -2524,10 +2577,10 @@ $("#mon-run").onclick=()=>busy($("#mon-run"),$("#mon-status"),"Sharing your late
   const c=monRead(); if(!c.sites.length) throw new Error("Choose at least one website.");
   if(!(AUTH.state().accounts||SYNC.syncSettings().enabled)) throw new Error("Turn on team sync or accounts first (section 3).");
   await store.set("monitor",{...((await store.get("monitor",null))||{}),...c,enabled:(await store.get("monitor",null))?.enabled??false}); await SYNC.syncNow();
-  const r=await fetch("/api/monitor",{method:"POST",credentials:"same-origin",headers:monHeaders(),body:JSON.stringify({site_ids:c.sites,email:$("#mon-mail").checked})});
+  const r=await fetch("/api/monitor",{method:"POST",credentials:"same-origin",headers:monHeaders(),body:JSON.stringify({site_ids:c.sites,email:$("#mon-mail").checked,emails:c.recipients})});
   const d=await r.json().catch(()=>({})); if(!r.ok) throw new Error(r.status===404&&!d.error?"The monitoring function isn't deployed yet. Push the latest code to GitHub.":d.error||`Check failed (${r.status})`);
   await SYNC.syncNow().catch(()=>{}); await renderMonitoring();
-  $("#mon-status").textContent=`Checked ${d.checked} website${d.checked===1?"":"s"}.${d.mail?.sent?` Email sent to ${d.mail.sent} recipient${d.mail.sent>1?"s":""}.`:d.mail?.skipped?` ${d.mail.skipped}`:d.mail?.error?` ${d.mail.error}`:""}`; });
+  $("#mon-status").textContent=`Checked ${d.checked} website${d.checked===1?"":"s"}.${d.deferred?` ${d.deferred} more will be checked by the hourly job.`:""}${d.mail?.sent?` Email sent to ${d.mail.sent} recipient${d.mail.sent>1?"s":""}.`:d.mail?.skipped==="no recipients"?" No email sent: add an email address above.":d.mail?.skipped&&d.mail.skipped!=="email not requested"?` No email sent: ${d.mail.skipped}.`:d.mail?.error?` Email failed: ${d.mail.error}`:""}`; });
 
 // ---------- weekly monitoring ----------
 const MON_LEVEL={alert:["fail","Needs attention"],watch:["warn","Keep an eye on"],ok:["pass","All good"],good:["pass","Good news"],info:["","For information"]};
@@ -2642,7 +2695,9 @@ async function sendChat(){
   const box=$("#chat-msgs"); if(box.querySelector("[data-starter]")) box.innerHTML="";
   box.insertAdjacentHTML("beforeend",`<div class="msg user"><div class="bubble">${esc(text)}</div></div><div class="msg ai" id="chat-wait"><div class="bubble status spin">Thinking…</div></div>`); box.scrollTop=box.scrollHeight;
   $("#chat-text").value=""; $("#chat-send").disabled=true;
-  try{ const c=await api(`/api/sites/${SITE_ID}/chat`,{method:"POST",body:JSON.stringify({chat_id:CHAT_ID,text})}); CHAT_ID=c.id; await loadChat(); $("#chat-status").textContent=""; }
+  const onDraft=t=>{ const w=$("#chat-wait"); if(!w) return; const near=box.scrollHeight-box.scrollTop-box.clientHeight<80;
+    w.innerHTML=`<div class="bubble">${mdToHtmlSafe(t)}<span class="live-cursor" aria-hidden="true"></span></div>`; if(near) box.scrollTop=box.scrollHeight; };
+  try{ const c=await api(`/api/sites/${SITE_ID}/chat`,{method:"POST",body:JSON.stringify({chat_id:CHAT_ID,text}),onDraft}); CHAT_ID=c.id; await loadChat(); $("#chat-status").textContent=""; }
   catch(e){ const w=$("#chat-wait"); if(w) w.remove(); $("#chat-text").value=text; $("#chat-status").className="status err"; $("#chat-status").textContent=e.message; }
   finally{ $("#chat-send").disabled=false; $("#chat-text").focus(); }
 }
@@ -2685,7 +2740,13 @@ function renderRepurpose(item,el){
 // ---------- publishing to WordPress ----------
 function renderPublishing(site){
   const box=$("#pub-form"); if(!box) return; const c=CMS.settings(site.id);
-  box.innerHTML=`<p class="status" style="margin-top:0">In WordPress, go to <b>Users → Profile → Application Passwords</b>, create one named “Content Engine”, and paste it here. It stays in this browser only, and you can revoke it in WordPress any time. Pages are always sent as drafts; you press Publish in WordPress.</p>
+  const cur=CMS.NAMES[c.platform]?c.platform:"wordpress";
+  const choose=`<div class="row" role="radiogroup" aria-label="Where to publish" style="gap:14px;margin:0 0 10px">${Object.entries(CMS.NAMES).map(([k,n])=>`<label class="check" style="margin:0"><input type="radio" name="pubp" value="${k}" ${cur===k?"checked":""}> ${n}</label>`).join("")}</div>`;
+  const bindChoose=()=>box.querySelectorAll("[name=pubp]").forEach(r=>r.onchange=()=>{ CMS.save(site.id,{...CMS.settings(site.id),platform:r.value}); renderPublishing(site); $("#pub-box").open=true; });
+  if(c.platform==="framer"){ renderFramerForm(site,box,c,choose); bindChoose(); return; }
+  if(c.platform==="webflow"){ renderWebflowForm(site,box,c,choose); bindChoose(); return; }
+  if(c.platform==="hubspot"){ renderHubspotForm(site,box,c,choose); bindChoose(); return; }
+  box.innerHTML=choose+`<p class="status" style="margin-top:0">In WordPress, go to <b>Users → Profile → Application Passwords</b>, create one named “Content Engine”, and paste it here. It stays in this browser only, and you can revoke it in WordPress any time. Pages are always sent as drafts; you press Publish in WordPress.</p>
    <div class="grid2" style="margin-bottom:0"><div class="field"><label for="wp-url">WordPress site address</label><input id="wp-url" value="${esc(c.site_url||new URL(site.url).origin)}"></div>
      <div class="field"><label for="wp-user">WordPress username</label><input id="wp-user" autocomplete="off" value="${esc(c.username||"")}"></div></div>
    <div class="grid2" style="margin-bottom:0"><div class="field"><label for="wp-pass">Application password</label><input id="wp-pass" type="password" autocomplete="off" value="${esc(c.app_password||"")}" placeholder="xxxx xxxx xxxx xxxx xxxx xxxx"></div>
@@ -2700,6 +2761,32 @@ function renderPublishing(site){
     v.categories=r.categories||[]; CMS.save(site.id,v); renderPublishing(site); $("#pub-box").open=true;
     $("#wp-st").innerHTML=`<span class="pass">Connected as ${esc(r.user.name)}${r.user.roles?.length?` (${esc(r.user.roles.join(", "))})`:""}.</span>${!r.can_publish_posts?' <span class="warn">This user may not be allowed to create posts.</span>':""}`; });
   $("#wp-forget").onclick=()=>{ localStorage.removeItem(`ce-cms:${store.dbName()}:${site.id}`); renderPublishing(site); };
+  bindChoose();
+}
+function renderFramerForm(site,box,c,choose){
+  const cols=c.collections||[], col=cols.find(x=>x.id===c.collection_id)||null, fields=col?.fields||[], m=c.map||{};
+  const sel=(k,label,types)=>`<div class="field"><label for="fr-m-${k}">${label}</label><select id="fr-m-${k}"><option value="">(don't send)</option>${fields.filter(f=>types.includes(f.type)).map(f=>`<option value="${esc(f.id)}" ${m[k]===f.id?"selected":""}>${esc(f.name)} (${esc(f.type==="formattedText"?"rich text":f.type)})</option>`).join("")}</select></div>`;
+  box.innerHTML=choose+`<p class="status" style="margin-top:0">In Framer, open your project, then <b>Site settings → API</b>, and create a <b>Server API key</b>. Paste it with the project's address (from the browser while the project is open). Both stay in this browser only. Pages go into a <b>CMS collection you created</b>, such as Blog.</p>
+   <div class="grid2" style="margin-bottom:0"><div class="field"><label for="fr-url">Framer project address</label><input id="fr-url" placeholder="https://framer.com/projects/Trupeer--abc123" value="${esc(c.project_url||"")}"></div>
+     <div class="field"><label for="fr-key">Server API key</label><input id="fr-key" type="password" autocomplete="off" value="${esc(c.api_key||"")}"></div></div>
+   <div class="row" style="margin-top:4px"><button class="btn" id="fr-test">${cols.length?"Test again":"Test and load collections"}</button><button class="btn ghost" id="fr-forget">Forget these details</button><span class="status" id="fr-st" role="status"></span></div>
+   ${cols.length?`<div class="grid2" style="margin:12px 0 0"><div class="field"><label for="fr-col">Collection for new pages</label><select id="fr-col"><option value="">Choose…</option>${cols.map(x=>`<option value="${esc(x.id)}" ${x.id===c.collection_id?"selected":""}>${esc(x.name)}</option>`).join("")}</select></div>
+     <div class="field"><label for="fr-mode">When I send a page</label><select id="fr-mode"><option value="draft" ${(c.mode||"draft")==="draft"?"selected":""}>Add it as a draft (publish from Framer)</option><option value="preview" ${c.mode==="preview"?"selected":""}>Add it and publish a preview link</option><option value="live" ${c.mode==="live"?"selected":""}>Add it and publish the live site</option></select></div></div>
+     ${col?`<p class="status" style="margin:8px 0 4px">Which field gets what (matched automatically; change if needed):</p><div class="grid3" style="margin-bottom:0">${sel("title","Title",["string"])}${sel("content","Page content",["formattedText"])}${sel("description","Excerpt / description",["string","formattedText"])}${sel("date","Date",["date"])}${sel("author","Author",["string"])}${sel("seo_title","SEO title",["string"])}${sel("seo_description","Meta description",["string"])}</div>
+     <div class="field" style="margin-top:8px;max-width:560px"><label for="fr-page">Live page address <span>(how this collection's pages are addressed; {slug} is replaced)</span></label><input id="fr-page" value="${esc(c.page_pattern||`${new URL(site.url).origin}/blog/{slug}`)}"></div>`:""}
+     <div class="row" style="margin-top:10px"><button class="btn" id="fr-save">Save</button><span class="status" id="fr-st2" role="status"></span></div>`:""}`;
+  const base=()=>({...CMS.settings(site.id),platform:"framer",project_url:$("#fr-url").value.trim(),api_key:$("#fr-key").value.trim()});
+  $("#fr-test").onclick=()=>busy($("#fr-test"),$("#fr-st"),"Connecting to Framer…",async()=>{ const v=base(); const r=await CMS.testFramer(v);
+    v.collections=r.collections||[]; if(!v.collections.some(x=>x.id===v.collection_id)){ const blog=v.collections.find(x=>/blog|post|article|resource/i.test(x.name))||v.collections[0]; v.collection_id=blog?.id||""; v.map=blog?CMS.guessMap(blog.fields):{}; }
+    CMS.save(site.id,v); renderPublishing(site); $("#pub-box").open=true;
+    $("#fr-st").innerHTML=v.collections.length?`<span class="pass">Connected. ${v.collections.length} collection${v.collections.length>1?"s":""} you can add pages to.</span>`:`<span class="warn">Connected, but there's no collection you can add pages to. In Framer, create a CMS collection (such as Blog) with a rich-text field for the content.</span>`; });
+  $("#fr-forget").onclick=()=>{ localStorage.removeItem(`ce-cms:${store.dbName()}:${site.id}`); CMS.save(site.id,{...CMS.settings(site.id),platform:"framer"}); renderPublishing(site); $("#pub-box").open=true; };
+  const cs=$("#fr-col"); if(cs) cs.onchange=()=>{ const v=CMS.settings(site.id), x=(v.collections||[]).find(k=>k.id===cs.value); CMS.save(site.id,{...v,collection_id:cs.value,map:x?CMS.guessMap(x.fields):{}}); renderPublishing(site); $("#pub-box").open=true; };
+  const sv=$("#fr-save"); if(sv) sv.onclick=()=>{ const v=CMS.settings(site.id), map={}; ["title","content","description","date","author","seo_title","seo_description"].forEach(k=>{ const e=$(`#fr-m-${k}`); if(e) map[k]=e.value; });
+    if(!map.content){ $("#fr-st2").innerHTML='<span class="warn">Choose the rich-text field for the page content.</span>'; return; }
+    const pat=($("#fr-page")?.value||"").trim(); if(pat&&!/\{slug\}/.test(pat)){ $("#fr-st2").innerHTML='<span class="warn">The live page address needs {slug} where the page’s address goes.</span>'; return; }
+    CMS.save(site.id,{...v,project_url:$("#fr-url").value.trim(),api_key:$("#fr-key").value.trim(),collection_id:$("#fr-col").value,mode:$("#fr-mode").value,map,page_pattern:pat});
+    $("#fr-st2").innerHTML='<span class="pass">Saved. Approved pages now show “Send to Framer”.</span>'; };
 }
 
 // ---------- reports ----------
@@ -3112,3 +3199,177 @@ $("#cmd-back").onclick=e=>{ if(e.target.id==="cmd-back") cmdClose(); };
 $("#cmd-open").onclick=cmdOpen;
 document.addEventListener("keydown",e=>{ if((e.ctrlKey||e.metaKey)&&!e.altKey&&e.key.toLowerCase()==="k"){ e.preventDefault(); if($("#cmd-back").classList.contains("hidden")) cmdOpen(); else cmdClose(); } });
 if(/Mac|iPhone|iPad/.test(navigator.platform||navigator.userAgent)) { const k=$("#cmd-kbd"); if(k) k.textContent="⌘K"; }
+
+// ---------- Write a page: preview the sources and untick any ----------
+let SRC_EXCLUDE={kw:"",urls:new Set()};
+{ const fb=$("#g-findsrc"); if(fb) fb.onclick=()=>{ if(!needSite($("#g-srcst"))) return; const kw=$("#g-kw").value.trim(); if(!kw){ $("#g-srcst").textContent="Type the main keyword first."; return; }
+  busy(fb,$("#g-srcst"),"Finding and reading sources…",async()=>{ const r=await api(`/api/sites/${SITE_ID}/research/preview`,{method:"POST",body:JSON.stringify({keyword:kw,source_urls:$("#g-sources").value.split(/\s+/).filter(Boolean)}),onProgress:t=>{ $("#g-srcst").textContent=t; }});
+    if(SRC_EXCLUDE.kw!==kw) SRC_EXCLUDE={kw,urls:new Set()};
+    $("#g-srcst").textContent=r.sources.length?`${r.sources.length} source${r.sources.length>1?"s":""} will be read${r.reused?" (found in the last 24 hours)":""}. Untick any you don't want.`:"No sources found. Add web addresses above, or a free search key in Settings → AI.";
+    $("#g-srclist").innerHTML=r.sources.length?`<ul class="clean" style="margin:6px 0">${r.sources.map(x=>`<li style="margin:3px 0"><label class="check" style="margin:0"><input type="checkbox" data-srcu="${esc(x.url)}" ${SRC_EXCLUDE.urls.has(x.url)?"":"checked"}> <a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.title)}</a> <span class="status">· ${esc(x.via)} · ${fmtN(x.words)} words</span></label></li>`).join("")}</ul>${(r.notes||[]).length?`<p class="status" style="margin:0">${r.notes.map(esc).join(" ")}</p>`:""}`:"";
+    $("#g-srclist").querySelectorAll("[data-srcu]").forEach(c=>c.onchange=()=>{ c.checked?SRC_EXCLUDE.urls.delete(c.dataset.srcu):SRC_EXCLUDE.urls.add(c.dataset.srcu); }); }); }; }
+
+// ---------- free keyword numbers (Bing) and real searches (autocomplete) ----------
+{ const mk=$("#kw-mkt"); if(mk){ const m=KD.market(); mk.innerHTML=KD.MARKETS.map(([c,l,n])=>`<option value="${c}|${l}" ${c===m.country?"selected":""}>${n}</option>`).join("");
+    mk.onchange=()=>{ const [country,language]=mk.value.split("|"); KD.setMarket({country,language}); }; } }
+{ const b=$("#kw-vol"); if(b) b.onclick=()=>{ if(!needSite($("#kw-volst"))) return;
+    if(!KD.bingReady()){ $("#kw-volst").innerHTML=`Add your free Bing Webmaster API key first: <button class="linkbtn" id="kw-volset">Settings → Google &amp; Bing</button>.`; $("#kw-volset").onclick=()=>{ SET_TAB="google"; show("settings"); }; return; }
+    const sel=[...KW_SEL]; busy(b,$("#kw-volst"),"Getting search numbers from Bing…",async()=>{ const r=await api(`/api/sites/${SITE_ID}/keywords/volumes`,{method:"POST",body:JSON.stringify({keywords:sel.length?sel:null}),onProgress:t=>{ $("#kw-volst").textContent=t; }});
+      await loadKw(); $("#kw-volst").textContent=r.message||`Added Bing numbers to ${r.updated} keyword${r.updated===1?"":"s"}${sel.length?" (the selected ones)":""}.${r.failed?` ${r.failed} couldn't be looked up.`:""}${r.stopped?` ${r.stopped}`:""}${r.more>0?` ${r.more} still without a number: click again to continue.`:""}`; }); }; }
+{ const go=$("#rs-go"), rel=$("#rs-rel"), out=$("#rs-out"), st=$("#rs-st"); let picked=new Set(), shown=[], cov={}, vols={};
+  const seed=()=>($("#rs-seed").value.trim()||$("#ki-seed")?.value.trim()||"");
+  const list=(title,rows,num)=>rows.length?`<h3 style="font-size:15px;margin:14px 0 4px">${title} <span class="status" style="font-weight:400">(${rows.length})</span></h3><ul class="clean" style="columns:2;column-gap:24px;margin:0">${rows.map(r=>`<li style="break-inside:avoid;margin:2px 0"><label class="check" style="margin:0"><input type="checkbox" data-rsk="${esc(r.keyword)}" ${picked.has(r.keyword)?"checked":""}> ${esc(r.keyword)}${num&&r.monthly!=null?` <span class="status">· ${fmtN(r.monthly)}/mo</span>`:vols[r.keyword]?` <span class="status">· ${fmtN(vols[r.keyword].monthly)}/mo${vols[r.keyword].trend!=null?` ${vols[r.keyword].trend>0?"↑":vols[r.keyword].trend<0?"↓":"→"}${Math.abs(vols[r.keyword].trend)}%`:""}</span>`:""}${cov[r.keyword]?.in_list?` <span class="pill">in My keywords</span>`:cov[r.keyword]?.status==="covered"?` <span class="pill pass" title="${esc(cov[r.keyword].url)}">you have a page</span>`:cov[r.keyword]?.status==="partial"?` <span class="pill warn" title="${esc(cov[r.keyword].url)}">partly covered</span>`:""}${r.sources?` <span class="status" title="${esc(r.sources.join(", "))}">${r.sources.map(x=>x[0].toUpperCase()).join("")}</span>`:""}</label></li>`).join("")}</ul>`:"";
+  const actions=()=>`<div class="row" style="margin-top:12px;gap:8px"><button class="btn small" id="rs-add">Add ticked to My keywords</button><button class="btn ghost small" id="rs-gaps">Tick the ones without a page</button><button class="btn ghost small" id="rs-vol">Bing numbers for ticked</button><button class="btn ghost small" id="rs-all">Tick all</button><span class="status" id="rs-st2" role="status"></span></div>`;
+  let last=null; const redraw=()=>{ if(last){ out.innerHTML=last(); bind(); } };
+  const markCov=async()=>{ try{ cov=await api(`/api/sites/${SITE_ID}/keywords/coverage`,{method:"POST",body:JSON.stringify({keywords:shown})}); redraw();
+    const gaps=shown.filter(k=>cov[k]&&!cov[k].in_list&&!["covered","partial"].includes(cov[k].status)).length; const s2=$("#rs-st2"); if(s2) s2.textContent=`${gaps} of ${shown.length} have no page on your site yet.`; }catch{} };
+  const bind=()=>{ out.querySelectorAll("[data-rsk]").forEach(c=>c.onchange=()=>{ c.checked?picked.add(c.dataset.rsk):picked.delete(c.dataset.rsk); });
+    const all=$("#rs-all"); if(all) all.onclick=()=>{ shown.forEach(k=>picked.add(k)); out.querySelectorAll("[data-rsk]").forEach(c=>c.checked=true); };
+    const gp=$("#rs-gaps"); if(gp) gp.onclick=()=>{ shown.filter(k=>cov[k]&&!cov[k].in_list&&!["covered","partial"].includes(cov[k].status)).forEach(k=>picked.add(k)); redraw(); };
+    const vb=$("#rs-vol"); if(vb) vb.onclick=()=>{ const list=[...picked].slice(0,25); if(!list.length){ $("#rs-st2").textContent="Tick some searches first (up to 25 at a time)."; return; }
+      if(!KD.bingReady()){ $("#rs-st2").textContent="This needs your free Bing Webmaster API key (Settings → Google & Bing)."; return; }
+      busy(vb,$("#rs-st2"),"Asking Bing…",async()=>{ const r=await KD.volumes(list,t=>{ const e=$("#rs-st2"); if(e) e.textContent=t; }); Object.entries(r).forEach(([k,v])=>{ if(k!=="_stopped"&&v&&!v.error) vols[k]=v; }); redraw(); const e=$("#rs-st2"); if(e) e.textContent=r._stopped||"Bing numbers added (monthly searches on Bing, with the trend)."; }); };
+    const add=$("#rs-add"); if(add) add.onclick=()=>{ if(!picked.size){ $("#rs-st2").textContent="Tick some searches first."; return; }
+      busy(add,$("#rs-st2"),"Adding…",async()=>{ const r=await api(`/api/sites/${SITE_ID}/keywords/add`,{method:"POST",body:JSON.stringify({keywords:[...picked],source:"real searches"})}); await loadKw();
+        $("#rs-st2").textContent=`Added ${r.added??picked.size} to My keywords${r.skipped?` (${r.skipped} were already there)`:""}. Use “Get search numbers (Bing)” there for their monthly searches.`; picked=new Set(); }); }; };
+  if(go) go.onclick=()=>{ const kw=seed(); if(!kw){ st.textContent="Type a topic or keyword."; return; } if(!needSite(st)) return;
+    const sources=[...document.querySelectorAll("[data-rssrc]:checked")].map(c=>c.dataset.rssrc); if(!sources.length){ st.textContent="Choose at least one source."; return; }
+    busy(go,st,"Collecting real searches…",async()=>{ const r=await KD.suggestions(kw,{sources,expand:$("#rs-exp").value},t=>{ st.textContent=t; }); picked=new Set(); shown=[...r.questions,...r.comparisons,...r.other].map(x=>x.keyword);
+      st.textContent=r.total?`${r.total} real searches${r.blocked.length?` (${r.blocked.join(", ")} stopped answering for now)`:""}. Letters show where each was seen: G Google, B Bing, Y YouTube.`:"No suggestions came back. Try a shorter or broader keyword.";
+      vols={}; cov={}; last=()=>list("Questions people ask",r.questions)+list("Comparisons and alternatives",r.comparisons)+list("Other searches",r.other)+(r.total?actions():""); redraw(); if(r.total) markCov(); }); };
+  if(rel) rel.onclick=()=>{ const kw=seed(); if(!kw){ st.textContent="Type a topic or keyword."; return; }
+    if(!KD.bingReady()){ st.innerHTML=`This needs your free Bing Webmaster API key: <button class="linkbtn" id="rs-set">Settings → Google &amp; Bing</button>.`; $("#rs-set").onclick=()=>{ SET_TAB="google"; show("settings"); }; return; }
+    busy(rel,st,"Asking Bing for related searches…",async()=>{ const rows=await KD.related(kw); picked=new Set(); shown=rows.map(x=>x.keyword);
+      st.textContent=rows.length?`${rows.length} related searches on Bing (${KD.market().country.toUpperCase()}), busiest first. Numbers are monthly searches on Bing.`:"Bing has no related searches for this keyword in this market.";
+      vols={}; cov={}; last=()=>list("Related searches on Bing",rows,true)+(rows.length?actions():""); redraw(); if(rows.length) markCov(); }); }; }
+
+// ---------- Home: This week (the 5 things that gain or protect the most clicks) ----------
+let TW=null;
+async function renderThisWeek(){ const out=$("#home-out"); if(!out||!SITE_ID) return;
+  let box=out.querySelector("[data-tw]"); if(!box){ box=document.createElement("div"); box.setAttribute("data-tw",""); out.prepend(box); }
+  TW=await api(`/api/sites/${SITE_ID}/this-week`);
+  const eff={low:"quick",medium:"a few hours",high:"a day or more"};
+  const imp=x=>x.clicks==null?(x.pages?`<span class="pill warn">${fmtN(x.pages)} page${x.pages>1?"s":""}</span>`:""):x.protects?`<span class="pill" title="Clicks these pages get now">protects ~${fmtN(x.clicks)} clicks/month</span>`:`<span class="pill pass" title="${x.rough?"A rough estimate":"Estimated from your Search Console data"}">${x.rough?"roughly ":""}+${fmtN(x.clicks)} clicks/month</span>`;
+  const last=TW.last&&TW.last.shown?`<span class="status">Last week: ${TW.last.done} of ${TW.last.shown} done.</span>`:"";
+  box.innerHTML=`<div class="panel"><div class="row" style="justify-content:space-between;align-items:baseline"><h2 style="margin:0">This week</h2><span class="status">${TW.done?`${TW.done} done so far · `:""}${last}</span></div>
+    <p class="status" style="margin:4px 0 10px">The ${TW.items.length||""} things that would gain or protect the most clicks, picked from all your data.${TW.have_google?"":" Connect Search Console (Performance → Import &amp; connect) for estimates in clicks."}</p>
+    ${TW.items.length?`<ol style="margin:0;padding-left:22px">${TW.items.map((x,i)=>`<li style="margin:0 0 10px"><div class="row" style="justify-content:space-between;gap:10px;flex-wrap:wrap"><div style="flex:1;min-width:260px"><b>${esc(x.title)}</b> ${imp(x)} <span class="status">· ${esc(eff[x.effort]||x.effort)}</span><div class="status" style="margin-top:2px">${esc(x.why)}</div></div>
+      <div class="row" style="gap:6px"><button class="btn small" data-twgo="${i}">Open</button>${READONLY?"":`<button class="btn ghost small" data-twdone="${i}">Done</button><button class="btn ghost small" data-twskip="${i}" title="Hide it until next week">Skip</button>`}</div></div></li>`).join("")}</ol>`
+      :`<p class="status" style="margin:0">${TW.done?"Nothing else stands out this week. Nice work.":"Nothing stands out yet. Read your website, connect Search Console, and add keywords so there's data to work from."}</p>`}
+    ${(TW.results||[]).length?`<p class="status" style="margin:8px 0 0"><b>Results of past work:</b> ${TW.results.map(r=>`${esc(r.label)}: <span class="${r.now>r.before?"pass":r.now<r.before?"warn":""}">${fmtN(r.before)} → ${fmtN(r.now)} clicks/month${r.change!=null?` (${r.change>0?"+":""}${r.change}%)`:""}</span>`).join(" · ")}</p>`:""}
+    ${TW.due.length?`<p class="status" style="margin:6px 0 0"><b>Due this week:</b> ${TW.due.map(d=>`${esc(d.title)} <span class="${d.overdue?"warn":""}">(${d.overdue?"overdue, ":""}${esc(fmtDate(d.due))})</span>`).join(" · ")} · <button class="linkbtn" data-go="calendar">Calendar</button></p>`:""}</div>`;
+  bindGo(box);
+  box.querySelectorAll("[data-twgo]").forEach(b=>b.onclick=()=>goAction({link:TW.items[+b.dataset.twgo].link}));
+  const mark=(b,what)=>b.onclick=async()=>{ b.disabled=true; await api(`/api/sites/${SITE_ID}/this-week`,{method:"POST",body:JSON.stringify({key:TW.items[+b.dataset[what==="done"?"twdone":"twskip"]].key,what})}); await renderThisWeek(); };
+  box.querySelectorAll("[data-twdone]").forEach(b=>mark(b,"done")); box.querySelectorAll("[data-twskip]").forEach(b=>mark(b,"skip"));
+}
+
+// ---------- live writing: show the page as it's being written ----------
+function liveDraft(md){ const box=$("#g-live"), body=$("#g-live-body"); if(!box||!body) return;
+  box.classList.remove("hidden"); const words=(md.match(/\S+/g)||[]).length; $("#g-live-n").textContent=`${fmtN(words)} words`;
+  body.innerHTML=mdToHtmlSafe(md)+'<span class="live-cursor" aria-hidden="true"></span>';
+  // keep the cursor in view while following, unless the reader scrolled up to read
+  if($("#g-live-follow").checked) body.scrollTop=body.scrollHeight; }
+
+// the Send button's wording, for whichever platform is connected
+function sendLabel(pub){ const c=CMS.settings(SITE_ID), nm=CMS.platformName(SITE_ID), same=pub&&(pub.platform||"wordpress")===(c.platform||"wordpress");
+  if(c.platform==="framer") return same?"Update in Framer":`Send to Framer${({draft:" as a draft",preview:" and publish a preview",live:" and publish live"})[c.mode||"draft"]}`;
+  if(c.platform==="webflow"||c.platform==="hubspot"){ const live=(c.platform==="webflow"?c.wf_mode:c.hs_mode)==="live"; return same?`Update in ${nm}${live?" and publish":""}`:`Send to ${nm}${live?" and publish live":" as a draft"}`; }
+  return same?"Update in WordPress":"Send to WordPress as a draft"; }
+function renderWebflowForm(site,box,c,choose){
+  const cols=c.wf_collections||[], col=cols.find(x=>x.id===c.wf_collection)||null, fields=(col?.fields||[]).filter(f=>!["name","slug"].includes(f.id)), m=c.wf_map||{};
+  const sel=(k,label,types)=>`<div class="field"><label for="wf-m-${k}">${label}</label><select id="wf-m-${k}"><option value="">(don't send)</option>${fields.filter(f=>types.includes(f.type)).map(f=>`<option value="${esc(f.id)}" ${m[k]===f.id?"selected":""}>${esc(f.name)} (${esc(f.type)})</option>`).join("")}</select></div>`;
+  const req=(col?.fields||[]).filter(f=>f.required&&!["name","slug"].includes(f.id)&&!Object.values(m).includes(f.id));
+  box.innerHTML=choose+`<p class="status" style="margin-top:0">In Webflow, open <b>Site settings → Apps &amp; integrations → API access</b> and generate a <b>site token</b> with <b>CMS read and write</b> (and Sites read). It stays in this browser only. Pages go into a CMS collection, such as Blog Posts: the title goes into Name, the address into Slug.</p>
+   <div class="row" style="gap:8px;align-items:flex-end"><div class="field" style="flex:1;margin:0"><label for="wf-token">Site API token</label><input id="wf-token" type="password" autocomplete="off" value="${esc(c.wf_token||"")}"></div><button class="btn" id="wf-test">${cols.length?"Test again":"Test and load collections"}</button><button class="btn ghost" id="wf-forget">Forget</button></div><span class="status" id="wf-st" role="status"></span>
+   ${cols.length?`<div class="grid2" style="margin:12px 0 0"><div class="field"><label for="wf-col">Collection for new pages</label><select id="wf-col"><option value="">Choose…</option>${cols.map(x=>`<option value="${esc(x.id)}" ${x.id===c.wf_collection?"selected":""}>${esc(x.name)}</option>`).join("")}</select></div>
+     <div class="field"><label for="wf-mode">When I send a page</label><select id="wf-mode"><option value="draft" ${(c.wf_mode||"draft")==="draft"?"selected":""}>Add it as a draft (publish from Webflow)</option><option value="live" ${c.wf_mode==="live"?"selected":""}>Add it and publish it live</option></select></div></div>
+     ${col?`<p class="status" style="margin:8px 0 4px">Which field gets what (matched automatically; change if needed):</p><div class="grid3" style="margin-bottom:0">${sel("content","Page content",["RichText"])}${sel("summary","Summary / excerpt",["PlainText","RichText"])}${sel("date","Date",["DateTime"])}${sel("author","Author",["PlainText"])}${sel("seo_title","SEO title",["PlainText"])}${sel("seo_description","Meta description",["PlainText"])}</div>
+     ${req.length?`<p class="warn" style="margin:6px 0 0">Required in Webflow but not filled: ${req.map(f=>esc(f.name)).join(", ")}. Map them above, or make them optional in Webflow.</p>`:""}
+     <div class="field" style="margin-top:8px;max-width:560px"><label for="wf-page">Live page address <span>({slug} is replaced)</span></label><input id="wf-page" value="${esc(c.wf_pattern||`${new URL(site.url).origin}/blog/{slug}`)}"></div>`:""}
+     <div class="row" style="margin-top:10px"><button class="btn" id="wf-save">Save</button><span class="status" id="wf-st2" role="status"></span></div>`:""}`;
+  $("#wf-test").onclick=()=>busy($("#wf-test"),$("#wf-st"),"Connecting to Webflow…",async()=>{ const v={...CMS.settings(site.id),platform:"webflow",wf_token:$("#wf-token").value.trim()}; const r=await CMS.testWebflow(v);
+    v.wf_collections=r.collections||[]; if(!v.wf_collections.some(x=>x.id===v.wf_collection)){ const blog=v.wf_collections.find(x=>/blog|post|article|resource/i.test(x.name))||v.wf_collections[0]; v.wf_collection=blog?.id||""; v.wf_map=blog?CMS.guessWebflowMap(blog.fields):{}; }
+    CMS.save(site.id,v); renderPublishing(site); $("#pub-box").open=true; $("#wf-st").innerHTML=v.wf_collections.length?`<span class="pass">Connected. ${v.wf_collections.length} collection${v.wf_collections.length>1?"s":""} found.</span>`:`<span class="warn">Connected, but no CMS collections were found.</span>`; });
+  $("#wf-forget").onclick=()=>{ const v=CMS.settings(site.id); ["wf_token","wf_collections","wf_collection","wf_map","wf_mode","wf_pattern"].forEach(k=>delete v[k]); CMS.save(site.id,v); renderPublishing(site); $("#pub-box").open=true; };
+  const cs=$("#wf-col"); if(cs) cs.onchange=()=>{ const v=CMS.settings(site.id), x=(v.wf_collections||[]).find(k=>k.id===cs.value); CMS.save(site.id,{...v,wf_collection:cs.value,wf_map:x?CMS.guessWebflowMap(x.fields):{}}); renderPublishing(site); $("#pub-box").open=true; };
+  const sv=$("#wf-save"); if(sv) sv.onclick=()=>{ const v=CMS.settings(site.id), map={}; ["content","summary","date","author","seo_title","seo_description"].forEach(k=>{ const e=$(`#wf-m-${k}`); if(e) map[k]=e.value; });
+    if(!map.content){ $("#wf-st2").innerHTML='<span class="warn">Choose the rich-text field for the page content.</span>'; return; }
+    const pat=($("#wf-page")?.value||"").trim(); if(pat&&!/\{slug\}/.test(pat)){ $("#wf-st2").innerHTML='<span class="warn">The live page address needs {slug}.</span>'; return; }
+    CMS.save(site.id,{...v,wf_token:$("#wf-token").value.trim(),wf_collection:$("#wf-col").value,wf_mode:$("#wf-mode").value,wf_map:map,wf_pattern:pat}); $("#wf-st2").innerHTML='<span class="pass">Saved. Approved pages now show “Send to Webflow”.</span>'; };
+}
+function renderHubspotForm(site,box,c,choose){
+  const blogs=c.hs_blogs||[], authors=c.hs_authors||[];
+  box.innerHTML=choose+`<p class="status" style="margin-top:0">In HubSpot, go to <b>Settings → Integrations → Private apps</b>, create one named “Content Engine” with the <b>content</b> scope, and paste its access token. It stays in this browser only.</p>
+   <div class="row" style="gap:8px;align-items:flex-end"><div class="field" style="flex:1;margin:0"><label for="hs-token">Private app access token</label><input id="hs-token" type="password" autocomplete="off" value="${esc(c.hs_token||"")}"></div><button class="btn" id="hs-test">${blogs.length?"Test again":"Test and load blogs"}</button><button class="btn ghost" id="hs-forget">Forget</button></div><span class="status" id="hs-st" role="status"></span>
+   ${blogs.length?`<div class="grid3" style="margin:12px 0 0"><div class="field"><label for="hs-blog">Blog</label><select id="hs-blog">${blogs.map(x=>`<option value="${esc(x.id)}" ${x.id===c.hs_blog?"selected":""}>${esc(x.name)}</option>`).join("")}</select></div>
+     <div class="field"><label for="hs-author">Author <span>(optional)</span></label><select id="hs-author"><option value="">(none)</option>${authors.map(x=>`<option value="${esc(x.id)}" ${x.id===c.hs_author?"selected":""}>${esc(x.name)}</option>`).join("")}</select></div>
+     <div class="field"><label for="hs-mode">When I send a page</label><select id="hs-mode"><option value="draft" ${(c.hs_mode||"draft")==="draft"?"selected":""}>Add it as a draft (publish from HubSpot)</option><option value="live" ${c.hs_mode==="live"?"selected":""}>Add it and publish it live</option></select></div></div>
+     <div class="row" style="margin-top:10px"><button class="btn" id="hs-save">Save</button><span class="status" id="hs-st2" role="status"></span></div>`:""}`;
+  $("#hs-test").onclick=()=>busy($("#hs-test"),$("#hs-st"),"Connecting to HubSpot…",async()=>{ const v={...CMS.settings(site.id),platform:"hubspot",hs_token:$("#hs-token").value.trim()}; const r=await CMS.testHubspot(v);
+    v.hs_blogs=r.blogs||[]; v.hs_authors=r.authors||[]; if(!v.hs_blogs.some(b=>b.id===v.hs_blog)) v.hs_blog=v.hs_blogs[0]?.id||"";
+    CMS.save(site.id,v); renderPublishing(site); $("#pub-box").open=true; $("#hs-st").innerHTML=v.hs_blogs.length?`<span class="pass">Connected. ${v.hs_blogs.length} blog${v.hs_blogs.length>1?"s":""} found.</span>`:`<span class="warn">Connected, but this HubSpot account has no blog yet.</span>`; });
+  $("#hs-forget").onclick=()=>{ const v=CMS.settings(site.id); ["hs_token","hs_blogs","hs_authors","hs_blog","hs_author","hs_mode"].forEach(k=>delete v[k]); CMS.save(site.id,v); renderPublishing(site); $("#pub-box").open=true; };
+  const sv=$("#hs-save"); if(sv) sv.onclick=()=>{ CMS.save(site.id,{...CMS.settings(site.id),hs_token:$("#hs-token").value.trim(),hs_blog:$("#hs-blog").value,hs_author:$("#hs-author").value,hs_mode:$("#hs-mode").value}); $("#hs-st2").innerHTML='<span class="pass">Saved. Approved pages now show “Send to HubSpot”.</span>'; };
+}
+
+// ---------- Site health → Links → Backlinks (Bing; strength from Open PageRank) ----------
+{ const k=$("#opr-key"); if(k){ k.value=LLM.getSettings().oprKey||""; $("#opr-save").onclick=()=>{ const v=k.value.trim(); if(v&&!/^[A-Za-z0-9]{20,80}$/.test(v)){ $("#opr-status").textContent="That doesn't look like an Open PageRank key."; return; }
+  const st=LLM.getSettings(); st.oprKey=v; LLM.saveSettings(st); $("#opr-status").textContent=v?"Saved. Check backlinks again to see each website's strength.":"Removed."; }; } }
+async function renderBacklinks(){ const box=$("#ta-bl"); if(!box||!SITE_ID) return;
+  if(!BL_READY()){ box.innerHTML=`<div class="panel">${emptyBox("Who links to your site","Free with your Bing Webmaster Tools API key: the websites and pages linking to you, their anchor text, new and lost links, and linked pages that now return an error.")}<p style="margin:0"><button class="btn" id="bl-set">Add the Bing key (Settings → Google &amp; Bing)</button></p></div>`; $("#bl-set").onclick=()=>{ SET_TAB="google"; show("settings"); }; return; }
+  const b=await api(`/api/sites/${SITE_ID}/backlinks`).catch(()=>null), stren=v=>v==null?"–":`<span class="${v>=5?"pass":v<3?"warn":""}">${v.toFixed(1)}</span>`;
+  const path=u=>String(u).replace(/^https?:\/\/[^/]+/,"")||"/", kinds=["brand","keyword","web address","generic","other","no text (image link)"];
+  box.innerHTML=`<div class="panel"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Backlinks</h2><div class="row" style="gap:6px"><button class="btn" id="bl-run">${b?"Check again":"Check backlinks (Bing)"}</button></div></div>
+    <p class="status" style="margin:4px 0 0" id="bl-st">${b?`Checked ${esc(fmtDate(b.at))}. Bing reports a sample of your links, not every one.${b.strength?"":" Add a free Open PageRank key (Settings → Google &amp; Bing) to see each website's strength."}`:"Who links to your site, from Bing Webmaster Tools (free)."}</p>
+    ${b?`<div class="grid3" style="margin:12px 0"><div class="kpi"><div style="font-size:24px;font-weight:700">${fmtN(b.totals.domains)}</div><div class="lbl">linking websites</div></div><div class="kpi"><div style="font-size:24px;font-weight:700">${fmtN(b.totals.linked_total||b.totals.links)}</div><div class="lbl">links found</div></div><div class="kpi"><div style="font-size:24px;font-weight:700">${fmtN(b.totals.pages)}</div><div class="lbl">of your pages are linked to</div></div></div>
+    ${b.compared_at?`<p class="status" style="margin:0 0 8px">Since ${esc(fmtDate(b.compared_at))}: <span class="pass">${b.new.length} new</span> · <span class="${b.lost.length?"warn":""}">${b.lost.length} lost</span></p>`:""}
+    ${b.broken.length?`<div class="verdict warn" style="margin:8px 0"><b>Win back ${b.broken.reduce((a,x)=>a+x.links,0)} links:</b> these pages have links from other websites but return an error. Redirect each to the closest live page (301).<ul style="margin:6px 0 0">${b.broken.slice(0,10).map(x=>`<li><span class="url">${esc(path(x.url))}</span>: ${x.links} link${x.links===1?"":"s"}, returns ${x.status||"an error"}${x.target?` → suggested: <span class="url">${esc(path(x.target))}</span>`:` · <span class="warn">no close page found: choose one with the same topic, or bring the page back</span>`}</li>`).join("")}</ul>
+      ${b.broken.some(x=>x.target)?`<div class="row" style="margin-top:8px;gap:6px"><select id="bl-fmt" aria-label="Redirect rule format" style="width:auto"><option value="netlify">Netlify (_redirects)</option><option value="apache">Apache (.htaccess)</option><option value="nginx">Nginx</option><option value="redirection">WordPress Redirection plugin (CSV)</option><option value="csv">CSV (Framer, Webflow and others)</option></select><button class="btn small" id="bl-copy">Copy redirect rules</button><span class="status" id="bl-cst"></span></div><p class="status" style="margin:4px 0 0">Check each suggestion before adding it: it's the closest page by its address, not always the best one.</p>`:""}</div>`:""}
+    ${(b.history||[]).length>=2?(()=>{ const h=b.history, mx=Math.max(...h.map(x=>x.domains),1), w=220, ht=36, pts=h.map((x,i)=>`${Math.round(i*(w-4)/(h.length-1))+2},${Math.round(ht-2-(x.domains/mx)*(ht-6))}`).join(" ");
+      return `<div class="row" style="gap:10px;margin:4px 0 0"><svg width="${w}" height="${ht}" role="img" aria-label="Linking websites over ${h.length} checks: from ${h[0].domains} to ${h[h.length-1].domains}"><polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="2"/></svg><span class="status">Linking websites over your last ${h.length} checks: ${h[0].domains} → ${h[h.length-1].domains}</span></div>`; })():""}
+    <h3 style="font-size:15px;margin:14px 0 6px">Linking websites</h3>
+    <div class="tw"><table><thead><tr><th>Website</th><th title="Open PageRank, 0–10">Strength</th><th>Links</th><th>Your pages</th><th>Main anchor text</th></tr></thead><tbody>${b.domains.slice(0,50).map(d=>`<tr><td>${esc(d.domain)}</td><td>${stren(d.strength)}</td><td>${d.links}</td><td>${d.pages}</td><td class="status">${esc(d.anchor||"–")}</td></tr>`).join("")||`<tr><td colspan="5" class="status">No links found yet.</td></tr>`}</tbody></table></div>
+    <div class="grid2" style="margin-top:14px"><div><h3 style="font-size:15px;margin:0 0 6px">Most-linked pages</h3><ol style="margin:0;padding-left:20px">${b.pages.slice(0,10).map(p=>`<li><span class="url">${esc(path(p.url))}</span> <span class="status">· ${fmtN(p.count)} links</span></li>`).join("")}</ol></div>
+      <div><h3 style="font-size:15px;margin:0 0 6px">Anchor text</h3><p class="status" style="margin:0 0 4px">A natural mix is mostly your brand and web addresses, with some keywords.</p>${(()=>{ const t=Object.values(b.mix||{}).reduce((a,x)=>a+x,0)||1; return kinds.filter(k=>b.mix?.[k]).map(k=>`<div class="row" style="gap:8px;margin:2px 0"><span style="width:150px">${esc(k)}</span><div style="flex:1;background:var(--soft);border-radius:4px;height:10px"><div style="width:${Math.round(100*b.mix[k]/t)}%;height:10px;border-radius:4px;background:var(--accent)"></div></div><span class="status" style="width:42px;text-align:right">${Math.round(100*b.mix[k]/t)}%</span></div>`).join(""); })()}</div></div>
+    ${b.new.length||b.lost.length?`<div class="grid2" style="margin-top:14px"><div><h3 style="font-size:15px;margin:0 0 6px">New links</h3><ul style="margin:0;padding-left:18px">${b.new.slice(0,10).map(l=>`<li><a href="${esc(l.from)}" target="_blank" rel="noopener">${esc(BL_HOST(l.from))}</a> → <span class="url">${esc(path(l.to))}</span></li>`).join("")||'<li class="status">None</li>'}</ul></div>
+      <div><h3 style="font-size:15px;margin:0 0 6px">Lost links</h3><ul style="margin:0;padding-left:18px">${b.lost.slice(0,10).map(l=>`<li><a href="${esc(l.from)}" target="_blank" rel="noopener">${esc(BL_HOST(l.from))}</a>${l.strength!=null?` <span class="status">(strength ${l.strength.toFixed(1)})</span>`:""} → <span class="url">${esc(path(l.to))}</span></li>`).join("")||'<li class="status">None</li>'}</ul></div></div>`:""}`:""}</div>`;
+  const cp=$("#bl-copy"); if(cp) cp.onclick=async()=>{ const MG=await import("./migration.js"), rows=b.broken.filter(x=>x.target).map(x=>({url:x.url,target:x.target}));
+    const txt=MG.exportRules(rows,$("#bl-fmt").value,window._siteUrl||""); try{ await navigator.clipboard.writeText(txt); $("#bl-cst").textContent=`Copied ${rows.length} rule${rows.length===1?"":"s"}.`; }catch{ $("#bl-cst").textContent="Your browser blocked copying."; } };
+  $("#bl-run").onclick=()=>busy($("#bl-run"),$("#bl-st"),"Checking backlinks…",async()=>{ await api(`/api/sites/${SITE_ID}/backlinks/run`,{method:"POST",body:"{}",onProgress:t=>{ const e=$("#bl-st"); if(e) e.textContent=t; }}); await renderBacklinks(); });
+}
+const BL_READY=()=>!!(LLM.getSettings().bingKey||"").trim(), BL_HOST=u=>{ try{ return new URL(u).hostname.replace(/^www\./,""); }catch{ return u; } };
+
+// ---------- Site health → Pages → Whole site (every page in the sitemaps, read in stages) ----------
+const dur=s=>s==null?"":s<90?`${Math.max(1,Math.round(s))} seconds`:s<5400?`${Math.round(s/60)} minutes`:`${(s/3600).toFixed(1)} hours`;
+async function renderFull(prog){ const box=$("#ta-full"); if(!box||!SITE_ID) return;
+  const v=await api(`/api/sites/${SITE_ID}/fullcrawl`), m=v.status, sm=v.summary, labels=Object.fromEntries(v.issues.map(i=>[i.key,i.label]));
+  const est=n=>`About ${fmtN(Math.ceil(n/10))} function calls (Netlify's free plan includes about 125,000 a month) and roughly ${dur(n/14)} with this tab open. You can pause any time, or close the tab and resume later.`;
+  let h=`<div class="panel"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Whole site</h2><div class="row" style="gap:6px" id="fc-btns"></div></div>
+    <p class="status" style="margin:4px 0 10px">Every page in your sitemaps, not a sample: Site health's checks on all of them, grouped by section so template problems stand out.</p>`;
+  if(!m) h+=`<p style="margin:0">${emptyBox("Read every page","First, find the pages in your sitemaps. Nothing is read until you start.")}</p>`;
+  else{ const pct=Math.min(100,Math.round(100*m.done/Math.max(1,m.total)));
+    h+=`<div style="background:var(--soft);border-radius:6px;height:12px;margin:6px 0"><div style="width:${pct}%;height:12px;border-radius:6px;background:var(--accent)"></div></div>
+      <p class="status" style="margin:0" id="fc-st">${m.state==="ready"?`${fmtN(m.total)} pages found. ${est(m.total)}`:m.state==="done"?`Read all ${fmtN(m.total)} pages (finished ${esc(fmtDate(m.updated))}). ${fmtN(m.errors)} returned errors.`:`${fmtN(m.done)} of ${fmtN(m.total)} pages read (${pct}%)${m.errors?`, ${fmtN(m.errors)} errors`:""}${v.running?(prog?.eta!=null?` · about ${dur(prog.eta)} left`:""):` · paused${m.error?`: ${esc(m.error)}`:""}`}.`}</p>`; }
+  if(sm){ const rows=Object.entries(sm.issues).filter(([,i])=>i.count).sort((a,b)=>b[1].count-a[1].count);
+    h+=`<div class="grid3" style="margin:12px 0"><div class="kpi"><div style="font-size:24px;font-weight:700">${fmtN(sm.pages)}</div><div class="lbl">pages read</div></div><div class="kpi"><div style="font-size:24px;font-weight:700">${fmtN(rows.reduce((a,[,i])=>a+i.count,0))}</div><div class="lbl">problems found</div></div><div class="kpi"><div style="font-size:24px;font-weight:700">${fmtN(sm.avg_ms)} ms</div><div class="lbl">average response time</div></div></div>
+      ${sm.prev?`<p class="status" style="margin:0 0 6px">Compared with the crawl on ${esc(fmtDate(sm.prev.at))} (${fmtN(sm.prev.pages)} pages).</p>`:""}
+      <div class="tw"><table><thead><tr><th>Problem</th><th>Pages</th><th>Share</th>${sm.prev?"<th>Since last crawl</th>":""}<th>Where it's concentrated</th><th>Examples</th></tr></thead><tbody>${rows.map(([k,i])=>{ const d=sm.prev?i.count-(sm.prev.counts?.[k]||0):null;
+        const where=(i.where||[]).map(w=>`<span class="url">${esc(w.section)}</span> <span class="status">${fmtN(w.n)} of ${fmtN(w.of)}</span>${w.rate>=0.8&&w.of>=5?' <span class="pill warn" title="Nearly every page in this section has it: fix the template once">template</span>':""}`).join("<br>");
+        return `<tr><td>${esc(labels[k])}</td><td><b>${fmtN(i.count)}</b></td><td>${Math.round(100*i.count/Math.max(1,sm.pages))}%</td>${sm.prev?`<td class="${d>0?"warn":d<0?"pass":""}">${d>0?"↑ "+fmtN(d):d<0?"↓ "+fmtN(-d):"–"}</td>`:""}<td>${where||'<span class="status">spread across the site</span>'}</td>
+          <td><details><summary class="status">${Math.min(20,i.examples.length)} pages</summary><ul style="margin:4px 0 0;padding-left:16px">${i.examples.slice(0,20).map(u=>`<li><a class="url" href="${esc(u)}" target="_blank" rel="noopener">${esc(u.replace(/^https?:\/\/[^/]+/,"")||"/")}</a></li>`).join("")}</ul></details></td></tr>`; }).join("")||`<tr><td colspan="5" class="pass">No problems found.</td></tr>`}</tbody></table></div>
+      <h3 style="font-size:15px;margin:14px 0 6px">By section</h3><div class="row" style="flex-wrap:wrap;gap:6px">${sm.sections.slice(0,24).map(x=>`<span class="pill">${esc(x.section)} · ${fmtN(x.pages)}</span>`).join("")}</div>`; }
+  box.innerHTML=h+"</div>";
+  const btns=$("#fc-btns"), st=()=>$("#fc-st")||$("#fc-st2");
+  const runIt=()=>{ setTimeout(()=>renderFull({}).catch(()=>{}),250); api(`/api/sites/${SITE_ID}/fullcrawl/run`,{method:"POST",body:"{}",onProgress:p=>{ if(CURRENT==="tech"&&TA_TAB==="full") renderFullSoon(p); }}).then(()=>renderFull()).catch(e=>{ renderFull(); toast(e.message,"error"); }); };
+  if(!READONLY){
+    if(!m||m.state==="done") btns.innerHTML=`${m?`<button class="btn ghost" id="fc-csv">Download all problems (CSV)</button>`:""}<button class="btn" id="fc-prep">${m?"Crawl again":"Find all pages"}</button>`;
+    else if(v.running) btns.innerHTML=`<button class="btn ghost" id="fc-pause">Pause</button>`;
+    else btns.innerHTML=`${m.state==="paused"?`<button class="btn ghost" id="fc-prep">Start over</button>`:""}<button class="btn" id="fc-go">${m.state==="ready"?"Start reading":"Resume"}</button>`;
+    const prep=$("#fc-prep"); if(prep) prep.onclick=()=>busy(prep,box.querySelector(".status"),"Reading your sitemaps…",async()=>{ await api(`/api/sites/${SITE_ID}/fullcrawl/prepare`,{method:"POST",body:"{}",onProgress:t=>{ const e=box.querySelector(".status"); if(e) e.textContent=t; }}); await renderFull(); });
+    const go=$("#fc-go"); if(go) go.onclick=runIt;
+    const pa=$("#fc-pause"); if(pa) pa.onclick=async()=>{ pa.disabled=true; await api(`/api/sites/${SITE_ID}/fullcrawl/pause`,{method:"POST",body:"{}"}); };
+    const cv=$("#fc-csv"); if(cv) cv.onclick=()=>api(`/api/sites/${SITE_ID}/fullcrawl/export.csv`);
+  }
+}
+let FC_T=null; function renderFullSoon(p){ if(FC_T) return; FC_T=setTimeout(()=>{ FC_T=null; renderFull(p).catch(()=>{}); },600); }

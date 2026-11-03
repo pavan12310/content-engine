@@ -464,6 +464,105 @@ addresses. **Leave all of them unset in Netlify**: without them the app uses the
 - Stand-in services: `GSC_API_BASE`, `GSC_INSPECT_BASE`, `GA_DATA_BASE`, `GA_ADMIN_BASE`, `GOOGLE_AUTH_URL`, `GOOGLE_TOKEN_URL`, `GOOGLE_REVOKE_URL`,
   `GOOGLE_STATUS_FEED`, `BING_API_BASE`, `WAYBACK_BASE`, `INDEXNOW_ENDPOINT`, `RESEND_BASE`, `TAVILY_BASE`, `BRAVE_BASE`
 - Chat alert testing: `NOTIFY_TEST_SINK`, `NOTIFY_COMBINE_MS`
+- Suggestions testing: `SUGGEST_BASE`
+- Webflow and HubSpot testing: `WEBFLOW_BASE`, `HUBSPOT_BASE`
+- Open PageRank testing: `OPR_BASE`
+- Framer testing: `FRAMER_API_MODULE` (loads a stand-in instead of the real framer-api package)
+
+## Reading sources before writing
+
+Write a page can read sources first, like an AI that browses (on by default: **Read sources before writing**). It collects sources from web
+search (if a free Tavily or Brave key is set; at most one page per website), Wikipedia (free; only articles really about the topic), and any
+addresses you list under **Sources to read**; reads each page's main text; splits it into short passages; and gives each section, the
+introduction and the FAQ only its most relevant passages, numbered, so even the built-in browser AI can write from many sources. The AI cites
+them as [1], [2]...; at the end, each citation is checked against the passages and removed if the source doesn't support the sentence, the rest
+become links, and a Sources list is added. My pages shows which sources were read and cited. Research for the same topic is reused for 24 hours. Your own most relevant pages are read as sources too ("your website"), so product details come from you. **Find sources** shows what
+will be read before writing; untick any you don't want. Numbers, dates, prices and percentages from the sources are collected into a short "key
+facts" list given to every section. After writing, passages copied word for word from a source (10 or more words) are rewritten in the AI's own
+words; anything still copied is named in the page's warnings.
+
+## AI editing and deep research
+
+**AI on selected text** (My pages → Edit): select text in the editor, choose Rewrite, Shorten, Expand, Simplify, Fix grammar, Friendlier,
+More professional, Add an example or Make a bulleted list (or type your own instruction), then **Apply to selected text**. Undo restores it;
+Save changes keeps a version as usual. **Change with AI** applies an instruction to the whole page ("make the intro shorter and add a comparison
+table"), and the result opens as tracked changes to accept or reject one by one. **Deep research** (with a web search key): once the page plan
+exists, the app searches once per section and reads one new source for each, from a website not used yet. Every search and read is kept in a
+**research log**, shown with the page's sources in My pages.
+
+## Publishing to Framer
+
+Approved pages can go straight into a Framer site's CMS, through Framer's Server API (open beta, free for now). In Framer, open the
+project → **Site settings → API** and create a **Server API key**. In Content Engine, go to **Websites → Publishing**, choose **Framer**,
+paste the project address (https://framer.com/projects/…) and the key, and click **Test and load collections**. Choose the collection for
+new pages (one you created, such as Blog: collections managed by plugins can't be edited from outside), check which field gets the title,
+content, excerpt, date, author, SEO title and meta description (matched automatically), and the live page address pattern
+(e.g. https://www.trupeer.ai/blog/{slug}). Then choose what **Send to Framer** does: add a draft (default), publish a preview, or publish
+the live site (asks first, since it publishes every unpublished change in the project). The content goes in as Markdown without the H1.
+Sending a page again updates its own item; an item someone made in Framer with the same address is never overwritten. Publishing is a
+separate step, so if it's slow the page is still saved. Functions run on Node 22 for this (set in netlify.toml).
+
+## Keyword numbers and real searches (free)
+
+**Search numbers (Bing):** with your free Bing Webmaster API key (Settings → Google & Bing), **Keywords → Get search numbers (Bing)** fills
+the Volume column with monthly searches on Bing for the chosen market, with the trend (last 12 weeks against the 12 before). It fills empty
+volumes and refreshes its own numbers after 30 days; numbers you entered yourself (for example from another tool) are kept. Bing has fewer
+searches than Google, so use these to compare keywords and spot trends. **Check a keyword** shows the same demand line, with the busiest month.
+**Real searches people type** (Keywords → Find ideas): what people type into Google, Bing and YouTube around a topic (questions and
+comparisons, or A to Z), grouped, with where each was seen; **Related on Bing** lists related searches with their numbers. Each search is marked
+when you already have a page for it; **Tick the ones without a page** and **Bing numbers for ticked** help choose, then **Add ticked to My
+keywords**. Autocomplete isn't an official API, so requests are gentle (three at a time, one retry), and results are cached for a week.
+
+## This week (Home)
+
+The top of Home lists the 5 things that would gain or protect the most clicks this week, picked from all your data: searches close to
+page one, titles that get too few clicks for their position, pages losing clicks (Search Console and Content decay), ranking drops, serious
+Site health problems on pages that get traffic, competing pages, and keywords with demand but no page. Each shows an estimated number of clicks
+a month (from your Search Console data; rough ones are marked), the effort, and an **Open** button that goes straight to it. At most two of
+one kind are shown, so the list stays varied. **Done** and **Skip** hide an item for the rest of the week. When something is marked Done, its
+clicks are recorded, and three weeks later Home shows the result under **Results of past work** (for example, title rewrite for "sop
+software": 12 → 30 clicks/month). Calendar items due within the week are listed too.
+
+## Live writing
+
+Text appears as it's written, like ChatGPT and Claude: in Write a page (a **Writing live** panel shows the page growing, section by
+section or as one page; untick **Follow the text** to read back while it writes), in **Ask AI** answers, and in **Change with AI** (a live
+preview before the tracked-changes review opens). It works with Claude, ChatGPT, Gemini, Ollama, the built-in AI and Demo mode. Replies that
+use web search arrive in one piece. If streaming fails for any reason, the request is sent again the normal way, so nothing is lost. Checks
+and fixes run after the first draft, so the final page can differ from what was shown live.
+
+## Publishing to Webflow and HubSpot, and Google Docs
+
+**Webflow:** in Webflow, Site settings → Apps & integrations → API access → generate a site token with CMS read and write (and Sites
+read). In Websites → Publishing, choose Webflow, paste it, and click Test and load collections. Choose the collection (e.g. Blog Posts); the
+title goes into Name and the address into Slug, and the page content, summary, date, author, SEO title and meta description are matched to
+fields automatically. **HubSpot:** Settings → Integrations → Private apps → create one with the "content" scope and paste its access token;
+choose the blog and (optionally) the author. For both, **Send** adds a draft by default, or publishes live (asks first). Sending again updates
+the same item or post (HubSpot changes its draft version, so a live post only changes when published); an item someone else made with the same
+address is never overwritten. Publishing is a separate step, so the page is saved even if publishing fails. Pages that go live on Framer,
+Webflow or HubSpot are queued for IndexNow. **Google Docs:** in My pages, Copy for Google Docs / Word (then Open a new Google Doc and paste:
+headings, lists, tables and links are kept), or download a **Word file**, which Word opens directly and Google Drive converts to a Google Doc.
+
+## Backlinks (free, from Bing)
+
+**Site health → Links → Backlinks** shows who links to your site, from Bing Webmaster Tools (the same free key as Bing data): the linking
+websites with their main anchor text, your most-linked pages, the anchor text mix (brand, keyword, web address, generic), and new and lost
+links since the last check, with a trend line. Add a free **Open PageRank** key (Settings → Google & Bing) to see each linking website's
+strength (0–10). Linked pages that now return an error are listed under **Win back links**, with the closest live page as a suggested
+redirect (only when there's a confident match: never the homepage, which Google treats as a "soft 404") and ready-to-paste rules for Netlify,
+Apache, Nginx, the WordPress Redirection plugin or CSV. These also appear in the to-do list and This week; lost links from strong websites
+become to-dos. Bing reports a sample of your links, not every one.
+
+## Whole-site crawl
+
+Site health normally reads a sample of your site (up to 1,000 pages). **Site health → Pages → Whole site** reads every page in your
+sitemaps (up to 50,000), 10 pages per function call through `/api/crawl-batch`, which returns only what Site health checks (status,
+redirects, response time, title, description, H1s, canonical, noindex, words, links, images without alt text, language, structured data).
+For a 42,000-page site that's about 4,200 function calls (Netlify's free plan includes about 125,000 a month) and roughly 50 minutes with the
+tab open. It saves its place after every batch: pause any time, or close the tab and resume later. Only your own website can be read. Results
+stay in this browser (they aren't synced). The summary lists each problem with its count, where it's concentrated (for example "/es/: 8 of 8
+pages", tagged **template** when nearly every page in a section has it, so one template fix solves them all), and what changed since the last
+crawl; download every page's problems as CSV. The biggest problems also become to-dos.
 
 ## Weekly monitoring
 
