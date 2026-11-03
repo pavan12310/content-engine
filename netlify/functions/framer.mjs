@@ -22,7 +22,7 @@ const FIELD_TYPES = new Set(["string", "formattedText", "date", "link", "boolean
 const why = e => {
   const m = String(e && e.message || e);
   if (/unauthori|invalid.*(key|token)|401|forbidden|403/i.test(m)) return "Framer didn't accept the API key. Create a Server API key in the project's site settings (API) and paste it again.";
-  if (/not.?found|404|no such project/i.test(m)) return "Framer couldn't find that project. Copy the address from the browser while the project is open (https://framer.com/projects/…).";
+  if (/not.?found|404|no such project|invalid project/i.test(m)) return "Framer couldn't find that project. Copy the address from the browser while the project is open (https://framer.com/projects/…).";
   if (/managed|read.?only/i.test(m)) return "That collection is managed by a plugin, so it can't be edited from outside. Choose a collection you created yourself.";
   return `Framer answered with an error: ${m.slice(0, 220)}`;
 };

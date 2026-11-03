@@ -31,6 +31,8 @@ const WP_ERR = (status, d) => {
   if (status === 401 || code === "rest_not_logged_in" || code === "incorrect_password" || code === "invalid_username") return "WordPress didn't accept the username or application password. Create a new application password in WordPress (Users → Profile → Application Passwords) and try again.";
   if (status === 403 || /cannot_create|cannot_edit|forbidden/.test(code)) return "This WordPress user isn't allowed to create or edit these posts. Use an Editor or Administrator account.";
   if (status === 404 && /rest_no_route/.test(code)) return "The WordPress REST API isn't available at this address. Check the site address, or ask your host whether a security plugin blocks /wp-json.";
+  // a 404 without WordPress's own error code means the address isn't a WordPress site at all
+  if (status === 404 && !code) return "This doesn't look like a WordPress site: there's no WordPress REST API at this address. Use the site's main address (for example https://example.com), and check that it runs WordPress.";
   if (status === 404) return "That post no longer exists in WordPress (it may have been deleted). Send it again as a new draft.";
   return `WordPress answered with an error (${status}${code ? `: ${code}` : ""}). ${String(d?.message || "").replace(/<[^>]+>/g, "").slice(0, 200)}`;
 };

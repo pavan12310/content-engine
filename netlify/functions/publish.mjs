@@ -18,7 +18,7 @@ async function call(base, path, token, { method = "GET", body } = {}, explain) {
   const ctrl = new AbortController(), t = setTimeout(() => ctrl.abort(), 8500);
   try {
     const r = await fetch(`${base}${path}`, { method, signal: ctrl.signal, headers: { authorization: `Bearer ${token}`, accept: "application/json", ...(body ? { "content-type": "application/json" } : {}) }, body: body ? JSON.stringify(body) : undefined });
-    const d = await r.json().catch(() => ({}));
+    const txt = await r.text().catch(() => ""); let d; try { d = txt ? JSON.parse(txt) : {}; } catch { d = { message: txt.slice(0, 300) }; }   // some errors are plain text
     if (!r.ok) throw new Bad(r.status, explain(r.status, d));
     return d;
   } catch (e) { if (e instanceof Bad) throw e; throw new Bad(504, e.name === "AbortError" ? "The CMS took too long to answer. Try again." : "Couldn't reach the CMS."); }
@@ -33,6 +33,7 @@ const wfErr = (s, d) => { const m = JSON.stringify(d || {});
   if (s === 429) return "Webflow's rate limit was reached. Try again in a minute.";
   return `Webflow answered with an error (${s}). ${String(d?.message || "").slice(0, 200)}`; };
 const hsErr = (s, d) => {
+  if (s === 400 && /invalid request/i.test(JSON.stringify(d || {}) + String(d?.message || ""))) return "That doesn't look like a HubSpot private app token (they start with “pat-”). Copy the access token from Settings → Integrations → Private apps.";
   if (s === 401) return "HubSpot didn't accept the token. Create a private app (Settings → Integrations → Private apps) with the “content” scope, and paste its access token.";
   if (s === 403) return "This HubSpot token can't edit blog posts. Give the private app the “content” scope.";
   if (s === 404) return "HubSpot couldn't find that blog or post. Test the connection again.";

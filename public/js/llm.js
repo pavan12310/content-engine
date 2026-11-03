@@ -336,12 +336,21 @@ async function localRun(s, prompt, { maxTokens, timeoutMs, system = null, text: 
     onCancel = () => { engine.interruptGenerate(); rej(new LLMError("Stopped.", "cancelled")); }; CANCEL.signal.addEventListener("abort", onCancel, { once: true });
   });
   try {
-    const r = await Promise.race([stop, engine.chat.completions.create({ messages: [{ role: "system", content: sys }, { role: "user", content: p + (qwen3 ? "\n/no_think" : "") }],
-      max_tokens: max, temperature: plain ? 0.7 : 0.6, ...(plain ? {} : { response_format: { type: "json_object" } }) })]);
+    const req = fmt => engine.chat.completions.create({ messages: [{ role: "system", content: sys }, { role: "user", content: p + (qwen3 ? "\n/no_think" : "") }],
+      max_tokens: max, temperature: plain ? 0.7 : 0.6, ...(plain ? {} : fmt) });
+    let r;
+    try { r = await Promise.race([stop, req(LOCAL_JSON())]); }
+    catch (e) { if (plain || LOCAL_NO_GRAMMAR || !grammarFailed(e)) throw e; LOCAL_NO_GRAMMAR = true; r = await Promise.race([stop, req({})]); }
     const text = String(r.choices?.[0]?.message?.content || "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
     return { text, truncated: r.choices?.[0]?.finish_reason === "length", usage: { input: r.usage?.prompt_tokens || 0, output: r.usage?.completion_tokens || 0, searches: 0 } };
   } finally { clearTimeout(timer); CANCEL.signal.removeEventListener("abort", onCancel); }
 }
+// JSON for the built-in AI: a schema that allows any fields (asking for "any JSON" without one crashes this engine version, and its
+// strict mode would otherwise only allow an empty object). If the engine still can't build its JSON rules, ask without them for the rest
+// of the session: the instructions ask for JSON anyway, and replies that aren't clean JSON are repaired.
+let LOCAL_NO_GRAMMAR = false;
+const LOCAL_JSON = () => LOCAL_NO_GRAMMAR ? {} : { response_format: { type: "json_object", schema: JSON.stringify({ type: "object", additionalProperties: true }) } };
+const grammarFailed = e => /grammar|response.?format|std::string|json.?schema/i.test(String(e && e.message || e));
 async function ollamaRun(s, prompt, { maxTokens, timeoutMs, system = null, text: plain = false }) {
   prompt = compactPrompt(prompt, 26000);   // local models read faster and stay focused with shorter prompts
   const base = (s.ollamaUrl || PROVIDERS.ollama.defaultUrl).replace(/\/+$/, ""), model = s.models.ollama || PROVIDERS.ollama.defaultModel;
@@ -437,9 +446,11 @@ const STREAM = {
     timer = setTimeout(() => { stopped = new LLMError(`The built-in AI didn't finish within ${Math.round(o.timeoutMs / 60000)} minutes. Try a smaller model or a shorter task.`, "timeout"); engine.interruptGenerate(); }, o.timeoutMs);
     onCancel = () => { stopped = new LLMError("Stopped.", "cancelled"); engine.interruptGenerate(); }; CANCEL.signal.addEventListener("abort", onCancel, { once: true });
     try {
-      const it = await engine.chat.completions.create({ messages: [{ role: "system", content: sys }, { role: "user", content: p + (qwen3 ? "\n/no_think" : "") }], max_tokens: max, temperature: o.text ? 0.7 : 0.6, stream: true, stream_options: { include_usage: true },
-        ...(o.text ? {} : { response_format: { type: "json_object" } }) });
-      for await (const ch of it) { const t = ch.choices?.[0]?.delta?.content; if (t) { text += t; o.onToken(shown(text)); } if (ch.choices?.[0]?.finish_reason) fin = ch.choices[0].finish_reason; if (ch.usage) usage = ch.usage; }
+      const mk = fmt => engine.chat.completions.create({ messages: [{ role: "system", content: sys }, { role: "user", content: p + (qwen3 ? "\n/no_think" : "") }], max_tokens: max, temperature: o.text ? 0.7 : 0.6, stream: true, stream_options: { include_usage: true },
+        ...(o.text ? {} : fmt) });
+      let it; try { it = await mk(LOCAL_JSON()); } catch (e) { if (o.text || LOCAL_NO_GRAMMAR || !grammarFailed(e)) throw e; LOCAL_NO_GRAMMAR = true; it = await mk({}); }
+      try { for await (const ch of it) { const t = ch.choices?.[0]?.delta?.content; if (t) { text += t; o.onToken(shown(text)); } if (ch.choices?.[0]?.finish_reason) fin = ch.choices[0].finish_reason; if (ch.usage) usage = ch.usage; } }
+      catch (e) { if (!o.text && !text && grammarFailed(e)) { LOCAL_NO_GRAMMAR = true; const x = new LLMError("JSON rules unavailable; asking again without them", 0); x.fallback = true; throw x; } throw e; }
       if (stopped) throw stopped;
       return { text: shown(text).trim(), truncated: fin === "length", usage: { input: usage?.prompt_tokens || 0, output: usage?.completion_tokens || 0, searches: 0 } };
     } finally { clearTimeout(timer); CANCEL.signal.removeEventListener("abort", onCancel); }
